@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+<title>機房即時監控</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: isometric server room — five rack rows by tier, data flows arc overhead, ops cards float at the corners */
+:root{
+  --sky:#c8d4ea;
+  --panel:rgba(255,255,255,.96);
+  --ink:#0d1530;
+  --ink-2:#3b4664;
+  --ink-3:#6b7593;
+  --line:#d6deed;
+  --accent:#1d54ff;
+  --accent-soft:#dbe5ff;
+  --ok:#00965a; --ok-soft:#d2f4e3;
+  --warn:#e07a00; --warn-soft:#ffecd2;
+  --crit:#e0263b; --crit-soft:#ffe0e4;
+  --m-cpu:#1d54ff; --m-mem:#7a4dff; --m-disk:#00a5b8;
+  --shadow:0 12px 32px rgba(20,36,90,.22),0 1px 3px rgba(20,36,90,.12);
+  --f-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  color-scheme:light;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--sky);color:var(--ink);font-family:var(--f-body);font-size:13px;overflow:hidden}
+#app{position:relative;height:100%;width:100%;overflow:hidden}
+#scene{position:absolute;inset:0;display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#scene.drag{cursor:grabbing}
+#scene.hot{cursor:pointer}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.card{background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid #fff;box-shadow:var(--shadow);border-radius:14px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;text-align:inherit}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.top{position:absolute;left:0;right:0;top:0;height:60px;display:flex;align-items:center;gap:14px;padding-inline:16px;background:var(--panel);border-bottom:1px solid var(--line);z-index:8}
+.brand{display:flex;align-items:center;gap:10px;white-space:nowrap}
+.brand svg{width:30px;height:30px}
+.brand b{display:block;font-size:15px}
+.brand small{display:block;color:var(--ink-3);font-size:11px}
+.search{position:relative;flex:1;max-width:400px}
+.search label{display:flex;align-items:center;gap:8px;height:38px;padding-inline:12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink-3)}
+.search input{flex:1;min-width:0;border:0;outline:0;background:none;font:inherit;color:var(--ink)}
+.search kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+.pop{position:absolute;top:calc(100% + 6px);padding:6px;z-index:9}
+.res{left:0;right:0}
+.res button{width:100%;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px;border-radius:8px}
+.res button:hover{background:var(--accent-soft)}
+.res small{color:var(--ink-3)}
+.spacer{flex:1}
+.env{display:flex;gap:14px;align-items:center;padding:0 12px;height:40px;border:1px solid var(--line);border-radius:10px;background:#fff;white-space:nowrap}
+.env span{color:var(--ink-3);font-size:11.5px}
+.env b{font-family:var(--f-mono);font-size:13px;color:var(--ink);margin-left:4px}
+.live{display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:999px;background:var(--ok-soft);color:var(--ok);font-weight:700;white-space:nowrap}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--ok);animation:pulse 1.8s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(0,150,90,.5)}70%{box-shadow:0 0 0 7px rgba(0,150,90,0)}100%{box-shadow:0 0 0 0 rgba(0,150,90,0)}}
+.alarm{display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:999px;background:var(--crit-soft);color:var(--crit);font-weight:700;white-space:nowrap}
+.alarm.calm{background:var(--ok-soft);color:var(--ok)}
+.user{display:flex;align-items:center;gap:10px;white-space:nowrap}
+.avatar{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#1d54ff,#00a5b8);color:#fff;font-weight:700}
+.user b{display:block}
+.user small{color:var(--ink-3);font-size:11px}
+
+.kpis{position:absolute;top:76px;left:16px;display:flex;gap:12px;z-index:3;max-width:calc(100% - 32px)}
+.kpi{display:flex;gap:12px;align-items:center;padding:12px 16px 12px 12px;min-width:176px}
+.ki{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);flex:none}
+.ki svg{width:22px;height:22px}
+.ki.c{background:var(--crit-soft);color:var(--crit)}
+.kpi small{display:block;color:var(--ink-2);font-size:12px}
+.kpi .v{display:flex;align-items:baseline;gap:6px;margin-block:1px}
+.kpi .v b{font-family:var(--f-mono);font-size:23px;font-weight:700;letter-spacing:-.02em}
+.kpi .v span{font-family:var(--f-mono);font-size:12px;color:var(--ink-3)}
+.kpi .sub{color:var(--ink-3);font-size:11px}
+
+.ctl{position:absolute;top:76px;right:398px;display:flex;flex-direction:column;padding:4px;gap:2px;z-index:3}
+.ctl button{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;color:var(--ink-2)}
+.ctl button:hover{background:var(--accent-soft);color:var(--accent)}
+.ctl svg{width:18px;height:18px}
+.ctl hr{border:0;border-top:1px solid var(--line);margin:3px 6px}
+
+.detail{position:absolute;top:76px;right:16px;width:370px;max-height:calc(100% - 372px);overflow:auto;padding:16px;z-index:4}
+.dh{display:flex;gap:12px;align-items:center}
+.dh .ico{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;background:var(--c,#1e2638);color:#fff;flex:none}
+.dh .ico svg{width:24px;height:24px}
+.eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.08em;color:var(--accent)}
+.dh h2{margin:0;font-size:17px;line-height:1.3}
+.dh h2.id{font-family:var(--f-mono)}
+.dh p{margin:0;color:var(--ink-3);font-size:12px}
+.acts{margin-left:auto;align-self:flex-start;display:flex;gap:4px}
+.acts button{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--ink-2);border:1px solid var(--line)}
+.acts button:hover{background:#eef2f9}
+.dstate{display:flex;align-items:center;gap:8px;margin-top:12px;color:var(--ink-2);font-size:12px;flex-wrap:wrap}
+.gauges{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.gauge{background:#f3f6fc;border-radius:10px;padding:9px 10px}
+.gauge small{display:block;color:var(--ink-2);font-size:11.5px}
+.gauge b{font-family:var(--f-mono);font-size:19px}
+.gauge b.w{color:var(--warn)}
+.gauge b.c{color:var(--crit)}
+.bar{display:block;height:6px;background:#e3e8f2;border-radius:6px;overflow:hidden;margin-top:5px}
+.bar i{display:block;height:100%;background:var(--c,var(--accent));border-radius:6px}
+.chart{margin-top:12px;padding:10px;border-radius:10px;background:#f3f6fc}
+.chart .ch{display:flex;justify-content:space-between;font-size:11.5px;color:var(--ink-2);margin-bottom:4px}
+.chart .ch b{font-family:var(--f-mono);color:var(--ink)}
+.chart svg{display:block;width:100%;height:56px}
+dl.kv{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;margin:12px 0 0;padding-top:12px;border-top:1px solid var(--line)}
+dl.kv dt{color:var(--ink-2)}
+dl.kv dd{margin:0;text-align:right;font-weight:500;min-width:0}
+.svc{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.svc span{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;border-radius:7px;background:#f3f6fc;font-size:12px}
+.svc span i{width:7px;height:7px;border-radius:50%;background:var(--c)}
+.fix{margin-top:12px;border:1px solid #ffc9a3;background:#fff6ee;border-radius:12px;padding:12px}
+.fix.c{border-color:#ffb3bd;background:#fff3f5}
+.fix h4{margin:0 0 6px;font-size:13px;color:var(--warn)}
+.fix.c h4{color:var(--crit)}
+.fix p{margin:0 0 8px;color:var(--ink-2);line-height:1.55}
+.fix .act{display:flex;justify-content:flex-end}
+.btn{height:32px;padding:0 12px;border-radius:8px;background:var(--accent);color:#fff;font-weight:700;white-space:nowrap}
+.btn[disabled]{background:#c7cfdf;cursor:default}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.tile{background:#f3f6fc;border-radius:10px;padding:9px 10px}
+.tile small{display:block;color:var(--ink-2);font-size:11.5px}
+.tile b{font-family:var(--f-mono);font-size:17px}
+.tile span{color:var(--ink-3);font-size:11.5px;margin-left:3px}
+.sec{display:flex;justify-content:space-between;align-items:baseline;margin:14px 0 6px;font-weight:700}
+.sec small{font-weight:400;color:var(--ink-3)}
+.lst{list-style:none;margin:0;padding:0}
+.lst li{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:6px 0;border-top:1px solid #edf0f6}
+.lst li:first-child{border-top:0}
+.lst li.m{grid-template-columns:96px 1fr 44px}
+.lst b{font-family:var(--f-mono)}
+.pill{display:inline-flex;align-items:center;height:24px;padding:0 9px;border-radius:7px;font-size:12px;font-weight:700;white-space:nowrap}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.crit{background:var(--crit-soft);color:var(--crit)}
+.pill.off{background:#2a3147;color:#fff}
+.pill.mute{background:#eaeef5;color:var(--ink-3)}
+
+.chain{position:absolute;left:16px;bottom:16px;width:min(800px,calc(100% - 468px));padding:16px;z-index:3}
+.th{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.th h3{margin:0;font-size:15px;display:flex;align-items:center;gap:8px}
+.th h3 svg{width:20px;height:20px;color:var(--accent)}
+.th small{color:var(--ink-3)}
+ol.tiers{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(7,1fr)}
+ol.tiers li{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;font-size:12px}
+ol.tiers li::before{content:"";position:absolute;top:16px;left:-50%;width:100%;height:3px;background:var(--c,#cfd8e8)}
+ol.tiers li:first-child::before{display:none}
+ol.tiers button{position:relative;z-index:1;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--c);color:#fff;border:3px solid #fff;box-shadow:0 0 0 1px var(--line)}
+ol.tiers button svg{width:15px;height:15px}
+ol.tiers b{font-weight:500}
+ol.tiers small{font-family:var(--f-mono);font-size:11px;color:var(--ink-3)}
+
+.fleet{position:absolute;right:16px;bottom:16px;width:418px;padding:12px;z-index:3;display:flex;flex-direction:column}
+.tabs{display:flex;align-items:center;gap:4px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.tabs button{height:30px;padding:0 10px;border-radius:8px;color:var(--ink-2);font-weight:500;white-space:nowrap}
+.tabs button span{color:var(--ink-3);font-family:var(--f-mono);font-size:11.5px;margin-left:4px}
+.tabs button[aria-selected="true"]{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(20,36,90,.2)}
+.tabs .where{margin-left:auto;color:var(--ink-3);font-size:11.5px;white-space:nowrap}
+.rows{overflow:auto;min-height:0;max-height:204px}
+.row{width:100%;display:grid;grid-template-columns:92px 1fr auto;align-items:center;gap:10px;padding:8px 6px;border-radius:9px}
+.row+.row{border-top:1px solid #edf0f6}
+.row:hover{background:#f1f5fe}
+.row.sel{background:var(--accent-soft)}
+.row b{font-family:var(--f-mono);font-size:12px;display:block}
+.row small{color:var(--ink-3);font-size:11px}
+.rq{min-width:0}
+.rq span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.mini i{display:block;height:5px;border-radius:3px;background:#e3e8f2;overflow:hidden}
+.mini i em{display:block;height:100%;background:var(--c)}
+
+.tag{position:absolute;left:0;top:0;z-index:2;pointer-events:none;display:flex;align-items:center;gap:6px;padding:5px 9px;border-radius:8px;background:var(--accent);color:#fff;font-family:var(--f-mono);font-size:12px;font-weight:700;box-shadow:0 6px 16px rgba(29,84,255,.4);white-space:nowrap}
+.tag span{font-family:var(--f-body);font-weight:500;font-size:11px;background:rgba(255,255,255,.22);border-radius:5px;padding:1px 6px}
+.tag::after{content:"";position:absolute;left:50%;bottom:-5px;width:10px;height:10px;background:inherit;transform:translateX(-50%) rotate(45deg);z-index:-1}
+.tag.hov{background:#0d1530}
+
+@media (max-width:1400px){.env{display:none}}
+@media (max-width:1240px){.user div{display:none}}
+@media (max-width:1060px){.chain{display:none}.live{display:none}}
+@media (max-width:760px){
+  .search,.user{display:none}
+  .brand small{display:none}
+  .kpis{overflow-x:auto;scrollbar-width:none;padding-bottom:4px}
+  .kpi{min-width:150px}
+  .kpi .v b{font-size:19px}
+  .ctl{top:auto;bottom:calc(34% + 32px);right:16px}
+  .fleet{left:16px;right:16px;width:auto;max-height:34%}
+  .detail{top:auto;bottom:16px;left:16px;right:16px;width:auto;max-height:58%;z-index:6}
+  .detail.ov{display:none}
+}
+@media (prefers-reduced-motion:reduce){.live i{animation:none}}
+</style>
+
+</head>
+<body>
+<div id="app">
+  <canvas id="scene" aria-label="機房 3D 即時畫面"></canvas>
+  <div class="tag" id="tag" hidden></div>
+  <div class="tag hov" id="hov" hidden></div>
+
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="5" y="3" width="22" height="26" rx="3" fill="#1e2638"/><rect x="8" y="7" width="16" height="3" rx="1" fill="#22c07f"/><rect x="8" y="13" width="16" height="3" rx="1" fill="#1d54ff"/><rect x="8" y="19" width="16" height="3" rx="1" fill="#f2a20c"/></svg>
+      <div><b>機房即時監控</b><small>總部機房 A · 30 台主機</small></div>
+    </div>
+    <div class="search">
+      <label><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="q" type="search" placeholder="搜尋主機名稱、IP、用途…" autocomplete="off"><kbd>/</kbd></label>
+      <div class="pop card res" id="res" hidden></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="env"><span>溫度<b id="eT">23.4°C</b></span><span>濕度<b id="eH">46%</b></span><span>電力負載<b id="eP">68%</b></span></div>
+    <div class="alarm" id="alarm"></div>
+    <div class="live"><i></i>即時 <span class="mono" id="clock">--:--:--</span></div>
+    <div class="user"><span class="avatar">周</span><div><b>周家豪</b><small>值班工程師</small></div></div>
+  </header>
+
+  <section class="kpis" aria-label="機房指標">
+    <div class="kpi card"><span class="ki"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="3" width="16" height="7" rx="1.5"/><rect x="4" y="14" width="16" height="7" rx="1.5" opacity=".6"/></svg></span><div><small>在線主機</small><div class="v"><b id="kUp">0</b><span id="kUpT"></span></div><small class="sub" id="kUpS"></small></div></div>
+    <div class="kpi card"><span class="ki c"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3 22 20H2z"/><rect x="11" y="9" width="2" height="6" fill="#fff"/><rect x="11" y="16.5" width="2" height="2" fill="#fff"/></svg></span><div><small>進行中告警</small><div class="v"><b id="kAl">0</b><span id="kAlT"></span></div><small class="sub" id="kAlS"></small></div></div>
+    <div class="kpi card"><span class="ki"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg></span><div><small>對外流量</small><div class="v"><b id="kNet">0</b><span>Gbps</span></div><small class="sub" id="kNetS"></small></div></div>
+    <div class="kpi card"><span class="ki"><svg viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6c0 1.7-3.6 3-8 3S4 7.7 4 6z" opacity=".6"/></svg></span><div><small>儲存使用率</small><div class="v"><b id="kSto">0</b><span>%</span></div><small class="sub" id="kStoS"></small></div></div>
+  </section>
+
+  <nav class="ctl card" aria-label="視角控制">
+    <button id="zin" aria-label="放大" title="放大"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button id="zout" aria-label="縮小" title="縮小"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg></button>
+    <hr>
+    <button id="rl" aria-label="向左旋轉" title="向左旋轉"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/></svg></button>
+    <button id="rr" aria-label="向右旋轉" title="向右旋轉"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4h-4"/></svg></button>
+    <button id="home" aria-label="回到全景" title="回到全景"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 11 9-7 9 7v9h-6v-6H9v6H3z"/></svg></button>
+  </nav>
+
+  <aside class="detail card" id="detail" aria-live="polite"></aside>
+  <section class="chain card" id="chain"></section>
+  <section class="fleet card">
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="alerts" aria-selected="true">告警<span id="tAl"></span></button>
+      <button role="tab" data-tab="hosts" aria-selected="false">主機<span>30</span></button>
+      <button role="tab" data-tab="flows" aria-selected="false">資料流<span id="tFl"></span></button>
+      <span class="where">示範資料</span>
+    </div>
+    <div class="rows" id="rows"></div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const app = $('app'), canvas = $('scene');
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let seed = 5; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+/* ===== renderer ===== */
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#c8d4ea');
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -300, 500);
+scene.add(new THREE.HemisphereLight('#ffffff', '#7f8db0', 0.66));
+const sun = new THREE.DirectionalLight('#fffaf0', 0.8), SUN_OFF = new THREE.Vector3(-22, 40, 26);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 1, far: 140 }); sun.shadow.bias = -0.0006;
+scene.add(sun, sun.target);
+
+const GC = new Map(), MC = new Map();
+const G = (w, h, d) => { const k = w + '|' + h + '|' + d; if (!GC.has(k)) GC.set(k, new THREE.BoxGeometry(w, h, d)); return GC.get(k); };
+function M(c, o) { if (o) return new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: .7 }, o)); if (!MC.has(c)) MC.set(c, new THREE.MeshStandardMaterial({ color: c, roughness: .7 })); return MC.get(c); }
+function box(p, w, h, d, mat, x, y, z, cast = true) { const m = new THREE.Mesh(G(w, h, d), typeof mat === 'string' ? M(mat) : mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; p.add(m); return m; }
+const DRAWS = [];
+function canvasTex(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; const run = () => { const g = c.getContext('2d'); g.clearRect(0, 0, w, h); draw(g, w, h); t.needsUpdate = true; }; run(); DRAWS.push(run); return t; }
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => DRAWS.forEach(f => f()));
+function label(p, text, w, h, { fg = '#fff', bg = '#1e2638', font = 'mono', size = .62 } = {}, x, y, z, ry = 0, flat = false) {
+  const px = 512, ph = Math.round(px * h / w);
+  const t = canvasTex(px, ph, (g, W, H) => {
+    if (bg) { g.fillStyle = bg; const r = H * .22; g.beginPath(); g.moveTo(r, 0); g.arcTo(W, 0, W, H, r); g.arcTo(W, H, 0, H, r); g.arcTo(0, H, 0, 0, r); g.arcTo(0, 0, W, 0, r); g.fill(); }
+    g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = `700 ${Math.round(H * size)}px ${font === 'mono' ? '"JetBrains Mono",monospace' : '"Noto Sans TC",sans-serif'}`; g.fillText(text, W / 2, H / 2 + 2);
+  });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t, transparent: true, toneMapped: false, depthWrite: false }));
+  m.position.set(x, y, z); if (flat) m.rotation.set(-Math.PI / 2, 0, ry); else m.rotation.y = ry; p.add(m); return m;
+}
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+const pickables = [];
+function reg(ent, obj) { obj.traverse(o => { if (o.isMesh) { o.userData.ent = ent; pickables.push(o); } }); }
+
+/* ===== inventory ===== */
+const ROWS = [
+  { id: 'A', name: '網路與安全', z: -13, items: [
+    ['FW-01', '防火牆（主）', 'net', 'FortiOS 7.4', [['HTTPS 檢測', 1], ['VPN', 1]], 38, 41, 22],
+    ['FW-02', '防火牆（備）', 'net', 'FortiOS 7.4', [['HA 心跳', 1]], 9, 33, 22],
+    ['LB-01', '負載平衡（主）', 'net', 'F5 BIG-IP 17', [['VIP 443', 1], ['健康檢查', 1]], 34, 46, 18],
+    ['LB-02', '負載平衡（備）', 'net', 'F5 BIG-IP 17', [['HA 心跳', 1]], 6, 30, 18],
+    ['SW-CORE-01', '核心交換器', 'net', 'NX-OS 10.3', [['VLAN', 1], ['LACP', 1]], 22, 35, 12],
+    ['SW-CORE-02', '核心交換器', 'net', 'NX-OS 10.3', [['VLAN', 1], ['LACP', 1]], 20, 34, 12] ] },
+  { id: 'B', name: '應用伺服器', z: -7.8, items: [
+    ['AP-ERP-01', 'ERP 應用', 'ap', 'RHEL 9.4', [['Tomcat', 1], ['排程', 1]], 46, 62, 48],
+    ['AP-ERP-02', 'ERP 應用', 'ap', 'RHEL 9.4', [['Tomcat', 1], ['排程', 1]], 44, 60, 47],
+    ['AP-EIP-01', '入口網站', 'ap', 'RHEL 9.4', [['Nginx', 1], ['Node', 1]], 36, 55, 41],
+    ['AP-EIP-02', '入口網站', 'ap', 'RHEL 9.4', [['Nginx', 1], ['Node', 1]], 35, 54, 40],
+    ['AP-FORM-01', '電子表單', 'ap', 'RHEL 9.4', [['Tomcat', 1], ['PDF 轉檔', 1]], 41, 84, 52],
+    ['AP-HR-01', '人資系統', 'ap', 'Windows Server 2022', [['IIS', 1], ['考勤同步', 1]], 28, 58, 49] ] },
+  { id: 'C', name: '中介服務', z: -2.6, items: [
+    ['API-GW-01', 'API 閘道', 'mid', 'RHEL 9.4', [['Gateway', 1], ['OAuth2', 1]], 31, 48, 33],
+    ['API-GW-02', 'API 閘道', 'mid', 'RHEL 9.4', [['Gateway', 1], ['OAuth2', 1]], 29, 47, 33],
+    ['MQ-01', '訊息佇列', 'mid', 'RHEL 9.4', [['MQ Broker', 1], ['Quorum', 1]], 26, 52, 44],
+    ['MQ-02', '訊息佇列', 'mid', 'RHEL 9.4', [['MQ Broker', 1], ['Quorum', 1]], 24, 51, 44],
+    ['CACHE-01', '快取（Redis）', 'mid', 'RHEL 9.4', [['Redis', 1], ['Sentinel', 1]], 18, 71, 21],
+    ['AI-GPU-01', 'AI 推論', 'mid', 'Ubuntu 24.04', [['vLLM', 1], ['GPU ×2', 1]], 63, 66, 58] ] },
+  { id: 'D', name: '資料庫', z: 2.6, items: [
+    ['DB-ERP-P', 'ERP 資料庫（主）', 'db', 'Oracle 19c', [['Listener', 1], ['Data Guard', 1]], 52, 74, 68],
+    ['DB-ERP-S', 'ERP 資料庫（備）', 'db', 'Oracle 19c', [['Listener', 1], ['Data Guard', 1]], 21, 70, 67],
+    ['DB-HR', '人資資料庫', 'db', 'SQL Server 2022', [['MSSQL', 1], ['Agent', 1]], 24, 63, 59],
+    ['DB-FORM', '表單資料庫', 'db', 'PostgreSQL 16', [['Postgres', 1], ['WAL 封存', 1]], 27, 58, 61],
+    ['DB-BI', '報表資料庫', 'db', 'PostgreSQL 16', [['Postgres', 1], ['ETL', 1]], 33, 69, 92],
+    ['DB-LOG', '日誌資料庫', 'db', 'Elasticsearch 8', [['ES 節點', 1], ['Kibana', 1]], 39, 72, 76] ] },
+  { id: 'E', name: '儲存與備份', z: 7.8, items: [
+    ['SAN-01', '主儲存（SAN）', 'sto', 'ONTAP 9.14', [['FC 埠', 1], ['快照', 1]], 17, 41, 71],
+    ['SAN-02', '主儲存（SAN）', 'sto', 'ONTAP 9.14', [['FC 埠', 1], ['快照', 1]], 15, 40, 74],
+    ['NAS-01', '檔案伺服器', 'sto', 'ONTAP 9.14', [['SMB', 1], ['NFS', 1]], 12, 38, 81],
+    ['BKP-01', '備份主機', 'sto', 'Windows Server 2022', [['備份排程', 1], ['重複資料刪除', 1]], 19, 44, 63],
+    ['BKP-02', '異地備份閘道', 'sto', 'Windows Server 2022', [['異地複寫', 1]], 11, 36, 58],
+    ['TAPE-01', '磁帶櫃', 'sto', 'LTO-9 ×4', [['磁帶機', 1]], 4, 20, 49] ] },
+];
+const TYPE_ICO = { net: '#2a3147', ap: '#1d54ff', mid: '#7a4dff', db: '#00a5b8', sto: '#5b6582' };
+const SERVERS = [];
+ROWS.forEach((R, ri) => R.items.forEach((it, i) => {
+  const [id, role, type, os, svcs, cpu, mem, disk] = it;
+  const s = { kind: 'srv', id, role, type, os, row: R, svcs, x: -4.75 + i * 1.9, z: R.z, ip: `10.20.${ri + 1}.${11 + i}`, rackU: `${R.id}-${String(i + 1).padStart(2, '0')}`,
+    base: { cpu, mem, disk }, cpu, mem, disk, nin: 0, nout: 0, conns: 0, offline: false, status: 'ok', issues: [], uptime: 18 + Math.round(rnd() * 300), hist: { cpu: [], mem: [], net: [] }, notified: {} };
+  SERVERS.push(s);
+}));
+const S = id => SERVERS.find(s => s.id === id);
+
+/* ===== room ===== */
+const tileTex = canvasTex(256, 256, (g, W, H) => { g.fillStyle = '#eef2f9'; g.fillRect(0, 0, W, H); g.strokeStyle = '#d2dbea'; g.lineWidth = 4; g.strokeRect(0, 0, W, H); g.fillStyle = '#dfe6f2'; for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) { g.beginPath(); g.arc(40 + i * 35, 40 + j * 35, 3, 0, 7); g.fill(); } });
+tileTex.wrapS = tileTex.wrapT = THREE.RepeatWrapping; tileTex.repeat.set(16, 20);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), M('#b9c7e2')); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(26, 34), new THREE.MeshStandardMaterial({ map: tileTex, roughness: .9 })); floor.rotation.x = -Math.PI / 2; floor.position.set(-1, .02, -2); floor.receiveShadow = true; scene.add(floor);
+box(scene, 26, .4, .4, '#c9d2e3', -1, .2, 15);
+box(scene, 26.4, 3.6, .4, '#e3e9f4', -1, 1.8, -19.2);
+box(scene, .4, 3.6, 34.4, '#e3e9f4', -14.2, 1.8, -2);
+box(scene, 26.4, .2, .5, '#1d54ff', -1, 3.6, -19.2, false);
+box(scene, .5, .2, 34.4, '#1d54ff', -14.2, 3.6, -2, false);
+for (let i = 0; i < 4; i++) { // CRAC units
+  const x = -9.5 + i * 5.6;
+  box(scene, 3.2, 3, 1.4, '#ffffff', x, 1.5, -18.2);
+  for (let k = 0; k < 5; k++) box(scene, 2.6, .08, .05, '#9aa6bf', x, .7 + k * .4, -17.47, false);
+  box(scene, .6, .25, .05, M('#22c07f', { emissive: '#22c07f', emissiveIntensity: .7 }), x + 1, 2.6, -17.47, false);
+}
+label(scene, '精密空調', 3, .6, { font: 'sans', bg: '#1d54ff', size: .5 }, -9.5, 3.4, -17.45);
+for (let i = 0; i < 3; i++) { box(scene, 1.6, 2.4, 1, '#f4f6fb', 10.4, 1.2, -16 + i * 2.2); box(scene, 1.62, .3, 1.02, '#ff6a2b', 10.4, 2.2, -16 + i * 2.2); }
+label(scene, 'UPS', 1.8, .6, { font: 'sans', bg: '#ff6a2b', size: .55 }, 10.4, 3, -13.2, 0);
+const rowLbl = ROWS.map(R => label(scene, `${R.id}　${R.name}`, 5.2, .9, { font: 'sans', bg: '#0d1530', size: .5 }, -9.4, .05, R.z, 0, true));
+
+/* cloud (internet) */
+const INET = { kind: 'inet', id: '外部網路', x: -21, z: -13, top: 4.2 };
+(() => { const g = new THREE.Group(); g.position.set(INET.x, 3.4, INET.z); scene.add(g);
+  const m = M('#ffffff', { roughness: .9 });
+  [[0, 0, 0, 1.6], [1.4, -.3, .2, 1.2], [-1.4, -.3, -.2, 1.25], [.5, .6, -.3, 1.1]].forEach(([x, y, z, r]) => { const s = new THREE.Mesh(new THREE.SphereGeometry(r, 18, 14), m); s.position.set(x, y, z); s.castShadow = true; g.add(s); });
+  label(g, '網際網路 / 分公司 VPN', 6, .9, { font: 'sans', bg: '#1d54ff', size: .45 }, 0, -2.2, 1.4); })();
+
+/* racks */
+const doorTex = canvasTex(128, 256, (g, W, H) => { g.fillStyle = '#232b3e'; g.fillRect(0, 0, W, H); g.fillStyle = '#323c55'; for (let y = 8; y < H; y += 7) for (let x = 6 + (y % 14 ? 3 : 0); x < W; x += 7) g.fillRect(x, y, 3, 3); });
+const BAR_COL = { cpu: '#1d54ff', mem: '#7a4dff', disk: '#00a5b8' };
+const LEVEL = { ok: '#22c07f', warn: '#f2a20c', crit: '#e0263b', off: '#3a4157' };
+SERVERS.forEach(s => {
+  const g = new THREE.Group(); g.position.set(s.x, 0, s.z); scene.add(g);
+  box(g, 1.4, 2.8, 1.8, '#1e2638', 0, 1.4, 0);
+  const door = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 2.5), new THREE.MeshStandardMaterial({ map: doorTex, roughness: .6 })); door.position.set(-.05, 1.4, .905); g.add(door);
+  for (let k = 0; k < 5; k++) box(g, 1.0, .07, .02, '#5b6582', -.08, .45 + k * .45, .915, false);
+  s.led = box(g, .1, 2.3, .03, M('#22c07f', { emissive: '#22c07f', emissiveIntensity: .9 }), .58, 1.4, .92, false);
+  s.topPlate = box(g, 1.46, .1, 1.86, M('#2a3350', { emissive: '#000000' }), 0, 2.85, 0);
+  label(g, s.id, 1.36, .36, { bg: '#0d1530', size: .52 }, -.04, 2.55, .93);
+  s.bars = {};
+  ['cpu', 'mem', 'disk'].forEach((k, i) => {
+    box(g, .34, .03, .34, '#3a4562', -.42 + i * .42, 2.92, 0, false);
+    const b = new THREE.Mesh(G(.3, 1, .3), M(BAR_COL[k], { emissive: BAR_COL[k], emissiveIntensity: .25, roughness: .4 })); b.position.set(-.42 + i * .42, 3, 0); b.castShadow = true; g.add(b); s.bars[k] = b;
+  });
+  const pin = new THREE.Group(), pm = M('#e0263b', { roughness: .35, emissive: '#7d0010', emissiveIntensity: .35 });
+  const ps = new THREE.Mesh(new THREE.SphereGeometry(.42, 18, 12), pm); pin.add(ps);
+  const pc = new THREE.Mesh(new THREE.ConeGeometry(.28, .8, 18), pm); pc.rotation.x = Math.PI; pc.position.y = -.55; pin.add(pc);
+  const pd = new THREE.Mesh(new THREE.SphereGeometry(.15, 10, 8), M('#ffffff')); pd.position.set(0, .03, .35); pin.add(pd);
+  pin.position.y = 5.6; pin.visible = false; g.add(pin); s.pin = pin;
+  const ring = new THREE.Mesh(new THREE.RingGeometry(1.3, 1.6, 40), new THREE.MeshBasicMaterial({ color: '#e0263b', transparent: true, opacity: .5, toneMapped: false, side: THREE.DoubleSide })); ring.rotation.x = -Math.PI / 2; ring.position.y = .04; ring.visible = false; g.add(ring); s.ring = ring;
+  s.obj = g; reg(s, g);
+});
+
+/* ===== flows ===== */
+const FLOWS = [];
+function flow(a, b, base, kind = 'data') {
+  const A = a === 'INET' ? INET : S(a), Bn = S(b);
+  const p0 = V(A.x, A === INET ? 3.4 : 3.3, A.z), p1 = V(Bn.x, 3.3, Bn.z);
+  const d = p0.distanceTo(p1), mid = p0.clone().lerp(p1, .5); mid.y += 1.2 + d * .14;
+  const curve = new THREE.QuadraticBezierCurve3(p0, mid, p1);
+  const col = kind === 'repl' ? '#7a4dff' : kind === 'backup' ? '#00a5b8' : '#1d54ff';
+  const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, .05, 6, false), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .45, toneMapped: false }));
+  scene.add(tube);
+  const parts = [];
+  for (let i = 0; i < 6; i++) { const m = new THREE.Mesh(new THREE.SphereGeometry(.13, 10, 8), new THREE.MeshBasicMaterial({ color: col, toneMapped: false })); scene.add(m); parts.push({ m, u: i / 6 }); }
+  const f = { from: a, to: b, A, B: Bn, base, kind, col, curve, tube, parts, mbps: base, down: false, surge: false };
+  FLOWS.push(f); return f;
+}
+[['INET', 'FW-01', 1800], ['INET', 'FW-02', 40], ['FW-01', 'LB-01', 1650], ['LB-01', 'AP-ERP-01', 420], ['LB-01', 'AP-ERP-02', 410], ['LB-01', 'AP-EIP-01', 300], ['LB-01', 'AP-EIP-02', 300], ['LB-01', 'AP-FORM-01', 180], ['LB-01', 'AP-HR-01', 120], ['LB-01', 'API-GW-01', 260],
+ ['API-GW-01', 'MQ-01', 150], ['AP-ERP-01', 'MQ-01', 90], ['AP-EIP-01', 'CACHE-01', 140], ['AP-EIP-01', 'AI-GPU-01', 70],
+ ['AP-ERP-01', 'DB-ERP-P', 380], ['AP-ERP-02', 'DB-ERP-P', 370], ['AP-HR-01', 'DB-HR', 110], ['AP-FORM-01', 'DB-FORM', 160], ['AP-EIP-02', 'DB-LOG', 90]].forEach(([a, b, m]) => flow(a, b, m));
+flow('DB-ERP-P', 'DB-ERP-S', 220, 'repl'); flow('DB-ERP-S', 'DB-BI', 130, 'repl');
+[['DB-ERP-P', 'SAN-01', 300], ['DB-HR', 'SAN-01', 80], ['DB-FORM', 'SAN-02', 110], ['DB-BI', 'SAN-02', 140], ['DB-LOG', 'NAS-01', 90], ['DB-ERP-S', 'BKP-01', 160], ['BKP-01', 'BKP-02', 60]].forEach(([a, b, m]) => flow(a, b, m, 'backup'));
+
+/* selection bracket */
+const bracketTex = canvasTex(256, 256, (g, W, H) => { g.fillStyle = 'rgba(29,84,255,.16)'; g.fillRect(8, 8, W - 16, H - 16); g.strokeStyle = '#1d54ff'; g.lineWidth = 12; g.lineCap = 'round'; const L = 60, m = 10; [[m, m, 1, 1], [W - m, m, -1, 1], [m, H - m, 1, -1], [W - m, H - m, -1, -1]].forEach(([x, y, sx, sy]) => { g.beginPath(); g.moveTo(x + sx * L, y); g.lineTo(x, y); g.lineTo(x, y + sy * L); g.stroke(); }); });
+const bracket = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.8), new THREE.MeshBasicMaterial({ map: bracketTex, transparent: true, depthWrite: false, toneMapped: false }));
+bracket.rotation.x = -Math.PI / 2; bracket.visible = false; scene.add(bracket);
+
+/* ===== scenario & metrics ===== */
+let clock = 0, scen = 0;
+const CYCLE = 130;
+const alerts = [];
+const now = () => new Date();
+const hhmmss = d => d.toLocaleTimeString('zh-TW', { hour12: false });
+function issuesOf(s, surge) {
+  const out = [];
+  if (s.offline) { out.push({ key: 'off', sev: 'crit', msg: '主機斷線，健康檢查連續失敗' }); return out; }
+  const had = k => s.issues.some(i => i.key === k), th = (k, v) => had(k) ? v - 3 : v;
+  if (s.cpu >= th('cpu', 90)) out.push({ key: 'cpu', sev: 'crit', msg: `CPU 使用率 ${s.cpu.toFixed(0)}%` }); else if (s.cpu >= th('cpu', 80)) out.push({ key: 'cpu', sev: 'warn', msg: `CPU 使用率 ${s.cpu.toFixed(0)}%` });
+  if (s.mem >= 95) out.push({ key: 'mem', sev: 'crit', msg: `記憶體 ${s.mem.toFixed(0)}%` }); else if (s.mem >= th('mem', 85)) out.push({ key: 'mem', sev: 'warn', msg: `記憶體 ${s.mem.toFixed(0)}%，持續上升` });
+  if (s.disk >= 95) out.push({ key: 'disk', sev: 'crit', msg: `磁碟 /data ${s.disk.toFixed(1)}%` }); else if (s.disk >= th('disk', 85)) out.push({ key: 'disk', sev: 'warn', msg: `磁碟 /data ${s.disk.toFixed(1)}%` });
+  if (surge && s.id === 'LB-01') out.push({ key: 'surge', sev: 'warn', msg: `連入流量為平常 ${surge.toFixed(1)} 倍` });
+  return out;
+}
+let surgeK = 1;
+function metricTick(live = true) {
+  const t = scen % CYCLE;
+  // scripted events
+  const off = t >= 9 && t < 82;
+  S('AP-EIP-02').offline = off;
+  const sTarget = t >= 28 && t < 60 ? 3.2 : 1;
+  surgeK += (sTarget - surgeK) * .25;
+  S('DB-BI').base.disk = 92.2 + 5.3 * (t / CYCLE);
+  S('AP-FORM-01').base.mem = 84 + 9.5 * (t / CYCLE);
+  const surge = surgeK > 1.3 ? surgeK : 0;
+  SERVERS.forEach(s => {
+    const b = s.base, n = () => (Math.random() - .5);
+    let cpu = b.cpu + n() * 8, mem = b.mem + n() * 2, disk = b.disk + n() * .2;
+    if (surge && ['LB-01', 'FW-01', 'AP-ERP-01', 'AP-ERP-02', 'DB-ERP-P'].includes(s.id)) cpu = Math.min(98, b.cpu * (.6 + surgeK * .55) + n() * 4);
+    if (surge && ['AP-EIP-01'].includes(s.id)) cpu = Math.min(96, b.cpu * (1 + surgeK * .5));
+    if (S('AP-EIP-02').offline && s.id === 'AP-EIP-01') cpu += 18;
+    if (s.offline) { cpu = 0; mem = 0; }
+    s.cpu = clamp(s.cpu + (cpu - s.cpu) * .5, 0, 99); s.mem = clamp(s.mem + (mem - s.mem) * .5, 0, 99); s.disk = clamp(disk, 0, 99.6);
+    if (s.offline) { s.cpu = 0; s.mem = 0; }
+  });
+  // flows
+  FLOWS.forEach(f => {
+    f.down = f.A.offline || f.B.offline;
+    f.surge = !!surge && ['INET>FW-01', 'FW-01>LB-01', 'LB-01>AP-ERP-01', 'LB-01>AP-ERP-02', 'AP-ERP-01>DB-ERP-P', 'AP-ERP-02>DB-ERP-P'].includes(f.from + '>' + f.to);
+    let m = f.base * (1 + (Math.random() - .5) * .15);
+    if (f.surge) m *= surgeK;
+    if (f.from === 'LB-01' && f.to === 'AP-EIP-01' && S('AP-EIP-02').offline) m *= 1.9;
+    f.mbps = f.down ? 0 : m;
+  });
+  SERVERS.forEach(s => {
+    s.nin = FLOWS.filter(f => f.B === s).reduce((a, f) => a + f.mbps, 0); s.nout = FLOWS.filter(f => f.A === s).reduce((a, f) => a + f.mbps, 0) * .6 + s.nin * .15;
+    s.conns = s.offline ? 0 : Math.round(s.nin * 1.7 + 30);
+    ['cpu', 'mem'].forEach(k => { s.hist[k].push(s[k]); if (s.hist[k].length > 60) s.hist[k].shift(); });
+    s.hist.net.push(s.nin + s.nout); if (s.hist.net.length > 60) s.hist.net.shift();
+    // issues → alerts
+    const iss = issuesOf(s, surge);
+    const keys = new Set(iss.map(i => i.key));
+    iss.forEach(i => {
+      let a = alerts.find(x => x.srv === s && x.key === i.key && x.active);
+      if (!a) { a = { srv: s, key: i.key, sev: i.sev, msg: i.msg, at: live ? now() : new Date(Date.now() - (60 - s.hist.cpu.length) * 1000), active: true, id: Math.random() }; alerts.unshift(a); }
+      else { a.sev = i.sev; a.msg = i.msg; }
+    });
+    alerts.forEach(a => { if (a.srv === s && a.active && !keys.has(a.key)) { a.active = false; a.end = now(); } });
+    s.issues = iss;
+    s.status = s.offline ? 'off' : iss.some(i => i.sev === 'crit') ? 'crit' : iss.length ? 'warn' : 'ok';
+  });
+  if (alerts.length > 60) alerts.length = 60;
+  if (t === CYCLE - 1) S('DB-BI').notified = {};
+}
+for (let i = 0; i < 60; i++) metricTick(false);
+scen = 7;
+alerts.forEach(a => a.at = new Date(Date.now() - (3 + Math.random() * 40) * 60000));
+
+/* ===== camera ===== */
+const HOME = { x: -1, z: -2, az: -0.62 };
+const view = { target: V(HOME.x, 0, HOME.z), goal: null, az: HOME.az, azTo: HOME.az, el: .64, zoom: 1, zoomTo: 1, base: 40 };
+const frustumH = () => view.base / view.zoom * Math.max(1, 1.25 / (app.clientWidth / Math.max(1, app.clientHeight)));
+function updateCamera() {
+  const a = app.clientWidth / Math.max(1, app.clientHeight), fh = frustumH();
+  camera.left = -fh * a / 2; camera.right = fh * a / 2; camera.top = fh / 2; camera.bottom = -fh / 2; camera.updateProjectionMatrix();
+  const d = 120, t = view.target;
+  camera.position.set(t.x + Math.sin(view.az) * Math.cos(view.el) * d, t.y + Math.sin(view.el) * d, t.z + Math.cos(view.az) * Math.cos(view.el) * d);
+  camera.lookAt(t); camera.updateMatrixWorld();
+  sun.position.copy(t).add(SUN_OFF); sun.target.position.copy(t); sun.target.updateMatrixWorld();
+}
+function resize() { renderer.setSize(app.clientWidth, app.clientHeight, false); updateCamera(); }
+new ResizeObserver(resize).observe(app);
+
+/* ===== selection & input ===== */
+let sel = null, tab = 'alerts', hover = null, focusRow = null;
+function select(s) {
+  sel = s; focusRow = null;
+  if (s) { view.goal = V(s.x, 0, s.z); if (view.zoomTo < 1.4) view.zoomTo = 1.7; }
+  renderUI();
+}
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function pick(cx, cy) { const r = canvas.getBoundingClientRect(); ndc.set((cx - r.left) / r.width * 2 - 1, -(cy - r.top) / r.height * 2 + 1); ray.setFromCamera(ndc, camera); const h = ray.intersectObjects(pickables, false)[0]; return h ? h.object.userData.ent : null; }
+const clampZ = z => Math.min(4, Math.max(.5, z));
+const ptrs = new Map(); let down = null, pinch = null;
+canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (ptrs.size === 1) down = { moved: 0 }; if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: view.zoomTo }; } $('res').hidden = true; });
+canvas.addEventListener('pointermove', e => {
+  const prev = ptrs.get(e.pointerId);
+  if (!prev) { hover = pick(e.clientX, e.clientY); canvas.classList.toggle('hot', !!hover); return; }
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (ptrs.size === 2 && pinch) { const [a, b] = [...ptrs.values()]; view.zoomTo = view.zoom = clampZ(pinch.z * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d); return; }
+  const dx = e.clientX - prev.x, dy = e.clientY - prev.y; if (down) down.moved += Math.abs(dx) + Math.abs(dy);
+  if (down && down.moved > 4) {
+    canvas.classList.add('drag'); view.goal = null; hover = null;
+    const upp = frustumH() / app.clientHeight;
+    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0); right.y = 0; right.normalize();
+    const fwd = V(-Math.sin(view.az), 0, -Math.cos(view.az));
+    view.target.addScaledVector(right, -dx * upp).addScaledVector(fwd, dy * upp / Math.sin(view.el));
+  }
+});
+function endPtr(e) { if (!ptrs.has(e.pointerId)) return; ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null; if (!ptrs.size) { canvas.classList.remove('drag'); if (down && down.moved <= 4 && e.type === 'pointerup') { const h = pick(e.clientX, e.clientY); if (h) select(h); } down = null; } }
+canvas.addEventListener('pointerup', endPtr); canvas.addEventListener('pointercancel', endPtr);
+canvas.addEventListener('pointerleave', () => hover = null);
+canvas.addEventListener('wheel', e => { e.preventDefault(); view.zoomTo = clampZ(view.zoomTo * Math.exp(-e.deltaY * .0012)); }, { passive: false });
+$('zin').onclick = () => view.zoomTo = clampZ(view.zoomTo * 1.3);
+$('zout').onclick = () => view.zoomTo = clampZ(view.zoomTo / 1.3);
+$('rl').onclick = () => view.azTo -= Math.PI / 4;
+$('rr').onclick = () => view.azTo += Math.PI / 4;
+$('home').onclick = () => { sel = null; focusRow = null; view.goal = V(HOME.x, 0, HOME.z); view.zoomTo = 1; view.azTo = HOME.az + Math.round((view.azTo - HOME.az) / (Math.PI * 2)) * Math.PI * 2; renderUI(); };
+
+/* ===== UI ===== */
+const ST = { ok: ['正常', 'ok'], warn: ['警告', 'warn'], crit: ['嚴重', 'crit'], off: ['斷線', 'off'] };
+const lvl = (v, w, c) => v >= c ? 'c' : v >= w ? 'w' : '';
+const lvlCol = (v, w, c, base) => v >= c ? '#e0263b' : v >= w ? '#f2a20c' : base;
+const fmtM = m => m >= 1000 ? (m / 1000).toFixed(2) + ' Gbps' : Math.round(m) + ' Mbps';
+const svgIco = { srv: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="3" width="16" height="7" rx="1.5"/><rect x="4" y="14" width="16" height="7" rx="1.5" opacity=".6"/></svg>', x: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6 6 18"/></svg>', room: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4v16M13 4v16M18 4v16"/></svg>' };
+function spark(arr, color, max, thr) {
+  const W = 300, H = 56, n = Math.max(2, arr.length), mx = max || Math.max(1, ...arr) * 1.15;
+  const pts = arr.map((v, i) => `${(i / (n - 1) * W).toFixed(1)},${(H - 2 - v / mx * (H - 6)).toFixed(1)}`).join(' ');
+  const ty = thr ? (H - 2 - thr / mx * (H - 6)).toFixed(1) : null;
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${ty ? `<line x1="0" x2="${W}" y1="${ty}" y2="${ty}" stroke="#e0263b" stroke-width="1" stroke-dasharray="4 4" opacity=".6"/>` : ''}<polygon points="0,${H} ${pts} ${W},${H}" fill="${color}" opacity=".14"/><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+}
+const ADVICE = {
+  off: s => ({ c: true, h: '處置建議 · 主機斷線', p: `健康檢查連續 3 次失敗，負載平衡已自動把 ${s.id} 移出服務池，流量改由同組主機承接。建議檢查網路線與交換器埠、確認電源，必要時遠端重開。`, b: '通知值班工程師' }),
+  disk: s => ({ c: s.disk >= 95, h: '處置建議 · 磁碟空間不足', p: `/data 分割區已用 ${s.disk.toFixed(1)}%，依近 24 小時成長速度約 ${Math.max(1, Math.round((99.5 - s.disk) * 2.4))} 小時後寫滿。建議清理 30 天前的封存日誌，並擴充 200 GB。`, b: '建立處理單' }),
+  mem: s => ({ c: s.mem >= 95, h: '處置建議 · 記憶體持續上升', p: `記憶體已連續 6 小時只升不降，疑似服務記憶體洩漏。建議排程離峰時段重啟服務，並先擷取記憶體快照交開發端分析。`, b: '建立處理單' }),
+  cpu: s => ({ c: s.cpu >= 90, h: '處置建議 · CPU 負載過高', p: `CPU 持續高於 80%，主因為連入流量暴增。建議啟用自動擴充，臨時加開一台應用節點分攤流量。`, b: '啟用擴充' }),
+  surge: s => ({ c: false, h: '處置建議 · 流量暴增', p: `連入流量為平常的 ${surgeK.toFixed(1)} 倍，集中在 ERP 系統。建議確認是否為月底結帳尖峰；若來源異常集中，啟用防火牆限流。`, b: '建立處理單' }),
+};
+function panelOverview() {
+  const up = SERVERS.filter(s => !s.offline).length, act = alerts.filter(a => a.active);
+  const top = [...SERVERS].filter(s => !s.offline).map(s => { const k = ['cpu', 'mem', 'disk'].reduce((a, k) => s[k] > s[a] ? k : a, 'cpu'); return { s, k, v: s[k] }; }).sort((a, b) => b.v - a.v).slice(0, 5);
+  const KN = { cpu: 'CPU', mem: '記憶體', disk: '磁碟' };
+  return `<div class="dh"><span class="ico" style="--c:#1d54ff">${svgIco.room}</span><div><div class="eyebrow">機房總覽</div><h2>總部機房 A</h2><p>5 區 · 30 台主機 · ${FLOWS.length} 條資料流</p></div></div>
+    <div class="dstate"><span class="pill ${act.some(a => a.sev === 'crit') ? 'crit' : act.length ? 'warn' : 'ok'}">${act.some(a => a.sev === 'crit') ? '有嚴重告警' : act.length ? '有警告' : '全部正常'}</span><span>溫度 23.4°C · 濕度 46% · 電力負載 68%</span></div>
+    <div class="sec">各區狀態<small>點選可定位</small></div>
+    <ul class="lst">${ROWS.map(R => { const ss = SERVERS.filter(s => s.row === R), bad = ss.filter(s => s.status !== 'ok'), w = bad.find(s => s.status === 'off') || bad.find(s => s.status === 'crit') || bad[0];
+      return `<li data-row="${R.id}" style="cursor:pointer"><span><b style="font-family:var(--f-body)">${R.id}　${R.name}</b> <small style="color:var(--ink-3)">${ss.length - bad.length}/${ss.length} 正常</small></span>${w ? `<span class="pill ${ST[w.status][1]}">${w.id} ${ST[w.status][0]}</span>` : '<span class="pill ok">正常</span>'}</li>`; }).join('')}</ul>
+    <div class="sec">負載最高<small>五台</small></div>
+    <ul class="lst">${top.map(({ s, k, v }) => `<li class="m" data-s="${s.id}" style="cursor:pointer"><b>${s.id}</b><span class="bar" style="--c:${lvlCol(v, 85, 95, BAR_COL[k])}"><i style="width:${v}%"></i></span><b style="text-align:right">${v.toFixed(0)}%</b></li>`).join('')}</ul>
+    <div class="sec">圖例</div>
+    <ul class="lst"><li><span><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#1d54ff"></i> CPU　<i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#7a4dff"></i> 記憶體　<i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#00a5b8"></i> 磁碟</span><small style="color:var(--ink-3)">機櫃頂柱高</small></li>
+    <li><span>藍線：服務流量　紫線：資料庫複寫　青線：備份</span><small style="color:var(--ink-3)">光點速度＝流量</small></li></ul>`;
+}
+function panelServer(s) {
+  const [st, cls] = ST[s.status];
+  const ins = FLOWS.filter(f => f.B === s), outs = FLOWS.filter(f => f.A === s);
+  const adv = s.issues.map(i => ADVICE[i.key] && Object.assign(ADVICE[i.key](s), { key: i.key }))[0];
+  const g = (k, n, w, c) => `<div class="gauge"><small>${n}</small><b class="${s.offline ? '' : lvl(s[k], w, c)}">${s.offline ? '—' : s[k].toFixed(0) + '%'}</b><span class="bar" style="--c:${lvlCol(s[k], w, c, BAR_COL[k])}"><i style="width:${s[k]}%"></i></span></div>`;
+  const done = adv && s.notified[adv.key];
+  return `<div class="dh"><span class="ico" style="--c:${TYPE_ICO[s.type]}">${svgIco.srv}</span><div><div class="eyebrow">${s.row.id} 區 · ${s.row.name} · 機櫃 ${s.rackU}</div><h2 class="id">${s.id}</h2><p>${s.role} · ${s.ip}</p></div><div class="acts"><button id="close" aria-label="關閉">${svgIco.x}</button></div></div>
+    <div class="dstate"><span class="pill ${cls}">${st}</span><span>${s.offline ? '最後回應 ' + hhmmss(new Date(Date.now() - 42000)) : `已運行 ${s.uptime} 天 · 連線數 ${s.conns.toLocaleString()}`}</span></div>
+    <div class="gauges">${g('cpu', 'CPU', 80, 90)}${g('mem', '記憶體', 85, 95)}${g('disk', '磁碟', 85, 95)}</div>
+    <div class="chart"><div class="ch"><span>CPU · 近 60 秒</span><b>${s.offline ? '—' : s.cpu.toFixed(0) + '%'}</b></div>${spark(s.hist.cpu, '#1d54ff', 100, 90)}</div>
+    <div class="chart"><div class="ch"><span>網路流量 · 近 60 秒</span><b>${fmtM(s.nin + s.nout)}</b></div>${spark(s.hist.net, '#00a5b8')}</div>
+    ${adv ? `<div class="fix ${adv.c ? 'c' : ''}"><h4>${adv.h}</h4><p>${adv.p}</p><div class="act"><button class="btn" id="act" data-k="${adv.key}" ${done ? 'disabled' : ''}>${done ? '已送出 · ' + done : adv.b}</button></div></div>` : ''}
+    <dl class="kv"><dt>作業系統</dt><dd>${s.os}</dd><dt>連入</dt><dd class="mono">${fmtM(s.nin)}</dd><dt>連出</dt><dd class="mono">${fmtM(s.nout)}</dd>
+      <dt>上游</dt><dd>${ins.map(f => f.A.id).join('、') || '—'}</dd><dt>下游</dt><dd>${outs.map(f => f.B.id).join('、') || '—'}</dd></dl>
+    <div class="sec">服務<small>${s.offline ? '無回應' : '運作中'}</small></div>
+    <div class="svc">${s.svcs.map(([n]) => `<span style="--c:${s.offline ? '#e0263b' : '#22c07f'}"><i></i>${n}</span>`).join('')}</div>`;
+}
+function renderDetail() { const d = $('detail'); d.classList.toggle('ov', !sel); d.innerHTML = sel ? panelServer(sel) : panelOverview(); }
+
+const TIERS = [
+  { n: '外部連線', ids: ['FW-01', 'FW-02'], f: f => f.from === 'INET', row: 'A', ico: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>' },
+  { n: '防火牆', ids: ['FW-01', 'FW-02'], f: f => f.from === 'FW-01', row: 'A', ico: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 20 5v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/></svg>' },
+  { n: '負載平衡', ids: ['LB-01', 'LB-02'], f: f => f.from === 'LB-01', row: 'A', ico: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 12h5M15 6h5M15 12h5M15 18h5M9 12l6-6M9 12h6M9 12l6 6"/></svg>' },
+  { n: '應用伺服器', ids: ROWS[1].items.map(i => i[0]), f: f => f.A.row === ROWS[1] && f.kind === 'data', row: 'B', ico: svgIco.srv },
+  { n: '中介服務', ids: ROWS[2].items.map(i => i[0]), f: f => f.A.row === ROWS[2], row: 'C', ico: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>' },
+  { n: '資料庫', ids: ROWS[3].items.map(i => i[0]), f: f => f.A.row === ROWS[3], row: 'D', ico: '<svg viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6c0 1.7-3.6 3-8 3S4 7.7 4 6z" opacity=".7"/></svg>' },
+  { n: '儲存備份', ids: ROWS[4].items.map(i => i[0]), f: f => f.A.row === ROWS[4], row: 'E', ico: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="5" width="18" height="6" rx="1.5"/><rect x="3" y="13" width="18" height="6" rx="1.5" opacity=".7"/></svg>' },
+];
+const rank = { ok: 0, warn: 1, crit: 2, off: 3 };
+function renderChain() {
+  $('chain').innerHTML = `<div class="th"><h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>服務鏈健康</h3><small>由外而內 · 點選定位到該區</small></div>
+    <ol class="tiers">${TIERS.map((T, i) => { const ss = T.ids.map(S), worst = ss.reduce((a, s) => rank[s.status] > rank[a] ? s.status : a, 'ok');
+      const c = { ok: '#22c07f', warn: '#f2a20c', crit: '#e0263b', off: '#e0263b' }[worst];
+      const mb = FLOWS.filter(T.f).reduce((a, f) => a + f.mbps, 0);
+      return `<li style="--c:${c}"><button data-tier="${i}" aria-label="${T.n}">${T.ico}</button><b>${T.n}</b><small>${fmtM(mb)}</small></li>`; }).join('')}</ol>`;
+}
+function renderRows() {
+  let h = '';
+  if (tab === 'alerts') h = alerts.slice(0, 40).map(a => `<button class="row ${a.srv === sel ? 'sel' : ''}" data-s="${a.srv.id}"><div><b>${a.srv.id}</b><small>${hhmmss(a.at)}</small></div><div class="rq"><span>${a.msg}</span><small>${a.active ? '進行中' : '已恢復 ' + hhmmss(a.end)}</small></div><span class="pill ${a.active ? (a.key === 'off' ? 'off' : a.sev) : 'mute'}">${a.active ? (a.key === 'off' ? '斷線' : a.sev === 'crit' ? '嚴重' : '警告') : '已恢復'}</span></button>`).join('') || '<div style="padding:14px;color:var(--ink-3)">目前沒有告警</div>';
+  else if (tab === 'hosts') h = [...SERVERS].sort((a, b) => rank[b.status] - rank[a.status] || Math.max(b.cpu, b.mem, b.disk) - Math.max(a.cpu, a.mem, a.disk)).map(s => `<button class="row ${s === sel ? 'sel' : ''}" data-s="${s.id}"><div><b>${s.id}</b><small>${s.role}</small></div><div class="mini">${['cpu', 'mem', 'disk'].map(k => `<i><em style="width:${s[k]}%;--c:${lvlCol(s[k], k === 'cpu' ? 80 : 85, k === 'cpu' ? 90 : 95, BAR_COL[k])}"></em></i>`).join('')}</div><span class="pill ${ST[s.status][1]}">${ST[s.status][0]}</span></button>`).join('');
+  else h = [...FLOWS].sort((a, b) => (b.down - a.down) || (b.surge - a.surge) || b.mbps - a.mbps).map(f => `<button class="row" data-s="${f.B.id}"><div><b>${f.A.id === '外部網路' ? '外部' : f.A.id}</b><small>→ ${f.B.id}</small></div><div class="rq"><span class="mono">${f.down ? '0 Mbps' : fmtM(f.mbps)}</span><small>${f.kind === 'repl' ? '資料庫複寫' : f.kind === 'backup' ? '備份' : '服務流量'}</small></div><span class="pill ${f.down ? 'crit' : f.surge ? 'warn' : 'ok'}">${f.down ? '中斷' : f.surge ? '暴增' : '正常'}</span></button>`).join('');
+  $('rows').innerHTML = h;
+}
+function renderTop() {
+  const up = SERVERS.filter(s => !s.offline).length, act = alerts.filter(a => a.active), cr = act.filter(a => a.sev === 'crit').length;
+  $('kUp').textContent = up; $('kUpT').textContent = '/ 30'; $('kUpS').textContent = up < 30 ? `${30 - up} 台斷線：${SERVERS.filter(s => s.offline).map(s => s.id).join('、')}` : '全部在線';
+  $('kAl').textContent = act.length; $('kAlT').textContent = `嚴重 ${cr}`; $('kAlS').textContent = `警告 ${act.length - cr} · 今日累計 ${alerts.length + 14}`;
+  const ext = FLOWS.filter(f => f.from === 'INET').reduce((a, f) => a + f.mbps, 0);
+  $('kNet').textContent = (ext / 1000).toFixed(2); $('kNetS').textContent = surgeK > 1.3 ? `平常的 ${surgeK.toFixed(1)} 倍` : '與平常相當';
+  const sto = ROWS[4].items.slice(0, 3).map(i => S(i[0]).disk); $('kSto').textContent = (sto.reduce((a, b) => a + b, 0) / 3).toFixed(1); $('kStoS').textContent = 'SAN ×2 · NAS 平均';
+  const al = $('alarm'); al.className = 'alarm' + (act.length ? '' : ' calm'); al.textContent = act.length ? `告警 ${act.length}（嚴重 ${cr}）` : '無告警';
+  $('tAl').textContent = act.length; $('tFl').textContent = FLOWS.filter(f => f.down).length ? `${FLOWS.filter(f => f.down).length} 中斷` : FLOWS.length;
+  $('eT').textContent = (23.2 + Math.sin(clock / 20) * .3).toFixed(1) + '°C'; $('eP').textContent = (66 + surgeK * 2).toFixed(0) + '%';
+}
+function renderUI() { renderTop(); renderDetail(); renderChain(); renderRows(); }
+
+const press = (el, fn) => { el.addEventListener('pointerdown', e => { if (e.button === 0) fn(e); }); el.addEventListener('click', e => { if (e.detail === 0) fn(e); }); };
+press($('detail'), e => {
+  if (e.target.closest('#close')) return select(null);
+  const a = e.target.closest('#act'); if (a && sel) { sel.notified[a.dataset.k] = hhmmss(new Date()); renderDetail(); return; }
+  const r = e.target.closest('[data-row]'); if (r) { const R = ROWS.find(x => x.id === r.dataset.row); sel = null; view.goal = V(0, 0, R.z); view.zoomTo = 1.5; renderUI(); return; }
+  const s = e.target.closest('[data-s]'); if (s) select(S(s.dataset.s));
+});
+press($('rows'), e => { const s = e.target.closest('[data-s]'); if (s) select(S(s.dataset.s)); });
+press($('chain'), e => { const b = e.target.closest('[data-tier]'); if (!b) return; const T = TIERS[+b.dataset.tier], ss = T.ids.map(S), worst = ss.find(s => s.status !== 'ok'); if (worst) select(worst); else { sel = null; const R = ROWS.find(x => x.id === T.row); view.goal = V(0, 0, R.z); view.zoomTo = 1.5; renderUI(); } });
+document.querySelector('.tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; tab = b.dataset.tab; document.querySelectorAll('[data-tab]').forEach(x => x.setAttribute('aria-selected', x === b)); renderRows(); });
+
+function searchAll(q) { q = q.trim().toLowerCase(); if (!q) return []; return SERVERS.filter(s => [s.id, s.ip, s.role, s.os].join(' ').toLowerCase().includes(q)).slice(0, 8); }
+$('q').addEventListener('input', () => { const r = searchAll($('q').value), bx = $('res'); bx._r = r; bx.innerHTML = r.length ? r.map((s, i) => `<button data-i="${i}"><b class="mono">${s.id}</b><small>${s.role} · ${s.ip}</small><span class="pill ${ST[s.status][1]}">${ST[s.status][0]}</span></button>`).join('') : '<div style="padding:10px;color:var(--ink-3)">找不到符合的主機</div>'; bx.hidden = !$('q').value.trim(); });
+press($('res'), e => { const b = e.target.closest('[data-i]'); if (!b) return; select($('res')._r[+b.dataset.i]); $('res').hidden = true; $('q').blur(); });
+$('q').addEventListener('keydown', e => { if (e.key === 'Enter') { const r = searchAll($('q').value); if (r[0]) { select(r[0]); $('res').hidden = true; $('q').blur(); } } if (e.key === 'Escape') { $('res').hidden = true; $('q').blur(); } });
+addEventListener('keydown', e => { if (e.key === '/' && document.activeElement !== $('q')) { e.preventDefault(); $('q').focus(); } });
+const tick = () => $('clock').textContent = hhmmss(new Date()); tick(); setInterval(tick, 1000);
+
+/* ===== loop ===== */
+const tag = $('tag'), hov = $('hov');
+function placeTag(el, x, y, z) { const v = V(x, y, z).project(camera); el.style.transform = `translate(${(v.x + 1) / 2 * app.clientWidth}px,${(1 - v.y) / 2 * app.clientHeight}px) translate(-50%,calc(-100% - 6px))`; }
+let last = performance.now(), secAcc = 0;
+function visual(dt) {
+  clock += dt;
+  const blink = (Math.sin(clock * 8) + 1) / 2;
+  SERVERS.forEach((s, i) => {
+    ['cpu', 'mem', 'disk'].forEach(k => {
+      const b = s.bars[k], h = .08 + s[k] / 100 * 1.8, cur = b.scale.y || 1;
+      const nh = cur + (h - cur) * Math.min(1, dt * 4); b.scale.y = nh; b.position.y = 2.92 + nh / 2;
+      const w = k === 'cpu' ? 80 : 85, c = k === 'cpu' ? 90 : 95, col = lvlCol(s[k], w, c, BAR_COL[k]);
+      b.material.color.set(col); b.material.emissive.set(col);
+    });
+    const lc = LEVEL[s.status];
+    s.led.material.color.set(lc); s.led.material.emissive.set(s.status === 'off' ? '#000000' : lc);
+    s.led.material.emissiveIntensity = s.status === 'crit' ? .4 + blink : .9;
+    s.topPlate.material.emissive.set(s.status === 'ok' ? '#000000' : lc); s.topPlate.material.emissiveIntensity = s.status === 'ok' ? 0 : .25 + blink * .35;
+    const bad = s.status === 'crit' || s.status === 'off';
+    s.pin.visible = bad; s.ring.visible = s.status !== 'ok';
+    s.ring.material.color.set(s.status === 'warn' ? '#f2a20c' : '#e0263b');
+    if (!reduceMotion) { s.pin.position.y = 5.6 + Math.sin(clock * 2.4 + i) * .25; s.pin.rotation.y += dt; const sc = 1 + ((clock * .8 + i * .1) % 1) * .5; s.ring.scale.set(sc, sc, 1); s.ring.material.opacity = .55 * (1 - ((clock * .8 + i * .1) % 1)); }
+  });
+  FLOWS.forEach(f => {
+    const hl = sel && (f.A === sel || f.B === sel);
+    const col = f.down ? '#e0263b' : f.surge ? '#ff6a2b' : f.col;
+    f.tube.material.color.set(col); f.tube.material.opacity = f.down ? .35 + blink * .4 : hl ? .9 : sel ? .18 : .45;
+    const n = f.down ? 0 : clamp(Math.round(f.mbps / 140), 1, 6), sp = .12 + Math.min(1.2, f.mbps / 1500);
+    f.parts.forEach((p, i) => {
+      p.m.visible = i < n && !(sel && !hl && false);
+      p.u = (p.u + dt * sp * (reduceMotion ? .2 : 1)) % 1;
+      p.m.position.copy(f.curve.getPoint(p.u)); p.m.material.color.set(col);
+      const sc = f.surge ? 1.5 : 1; p.m.scale.setScalar(sc);
+    });
+  });
+}
+function frame(t) {
+  const raw = Math.max(0, (t - last) / 1000), dt = Math.min(.05, raw); last = t;
+  secAcc += Math.min(raw, 2); if (secAcc >= 1) { secAcc -= 1; scen++; metricTick(); renderUI(); }
+  visual(dt);
+  const k = reduceMotion ? 1 : Math.min(1, dt * 5);
+  view.az += (view.azTo - view.az) * k; view.zoom += (view.zoomTo - view.zoom) * k;
+  if (view.goal) { view.target.lerp(view.goal, reduceMotion ? 1 : Math.min(1, dt * 3)); if (view.target.distanceTo(view.goal) < .05) view.goal = null; }
+  updateCamera();
+  if (sel) {
+    bracket.visible = true; bracket.position.set(sel.x, .05, sel.z);
+    const p = 1 + (reduceMotion ? 0 : Math.sin(clock * 4) * .03); bracket.scale.set(p, p, 1);
+    tag.hidden = false; placeTag(tag, sel.x, 5.2, sel.z); tag.innerHTML = `${sel.id}<span>${ST[sel.status][0]}</span>`;
+    tag.style.background = sel.status === 'ok' ? '' : sel.status === 'warn' ? '#e07a00' : '#e0263b';
+  } else { bracket.visible = false; tag.hidden = true; }
+  if (hover && hover !== sel) { hov.hidden = false; placeTag(hov, hover.x, 4.6, hover.z); hov.textContent = `${hover.id} · CPU ${hover.cpu.toFixed(0)}% · 記憶體 ${hover.mem.toFixed(0)}% · 磁碟 ${hover.disk.toFixed(0)}%`; } else hov.hidden = true;
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+resize(); visual(0); renderUI(); requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>

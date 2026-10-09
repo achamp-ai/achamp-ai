@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D 即時監控示範</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@700&display=swap">
+<style>
+:root{--bg:#c8d4ea;--card:#fff;--ink:#0d1530;--ink2:#3b4664;--ink3:#6b7593;--acc:#1d54ff;color-scheme:light}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif}
+main{max-width:1040px;margin:0 auto;padding:48px 16px}
+h1{font-size:30px;margin:0 0 8px;text-wrap:balance}
+p.lead{color:var(--ink2);margin:0 0 28px;line-height:1.6;max-width:62ch}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+a.c{display:flex;flex-direction:column;gap:8px;background:var(--card);border-radius:16px;padding:20px;text-decoration:none;color:inherit;box-shadow:0 12px 32px rgba(20,36,90,.18);transition:transform .15s}
+a.c:hover{transform:translateY(-3px)}a.c:focus-visible{outline:3px solid var(--acc);outline-offset:3px}
+.k{font-family:"JetBrains Mono",monospace;font-size:12px;font-weight:700;color:var(--acc);letter-spacing:.08em}
+a.c b{font-size:19px}a.c span{color:var(--ink2);line-height:1.55;font-size:14px}a.c em{margin-top:auto;font-style:normal;color:var(--acc);font-weight:700;font-size:14px}
+footer{margin-top:28px;color:var(--ink3);font-size:13px}
+@media (prefers-reduced-motion:reduce){a.c{transition:none}}
+</style>
+</head>
+<body>
+<main>
+<h1>3D 即時監控示範</h1>
+<p class="lead">同一套手法做的三個情境：等角 3D 場景當總覽，點任何物件在側邊看即時狀態。畫面中的公司、人名、數字皆為示範資料。</p>
+<div class="grid">
+<a class="c" href="warehouse/"><span class="k">01 · 物流</span><b>物流場站監控</b><span>五個據點的卡車進出、碼頭裝卸、堆高機與庫存，點選看出貨進度。</span><em>開啟 →</em></a>
+<a class="c" href="service-ops/"><span class="k">02 · 客服</span><b>智慧客服運營中心</b><span>市民提問經意圖路由分派給專業 Agent，即時看解決率、未命中題與修復建議。</span><em>開啟 →</em></a>
+<a class="c" href="datacenter/"><span class="k">03 · 機房</span><b>機房即時監控</b><span>30 台主機的 CPU、記憶體、磁碟與資料流向，斷線與流量暴增即時告警。</span><em>開啟 →</em></a>
+</div>
+<footer>需要支援 WebGL 的瀏覽器。建議以桌機開啟。</footer>
+</main>
+</body>
+</html>

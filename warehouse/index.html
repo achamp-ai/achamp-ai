@@ -1,0 +1,1134 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+<title>DockSight 物流場站</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: five Taiwan sites laid along one highway; the isometric scene is the hero, instrument cards float at the corners */
+:root{
+  --sky:#c9d5ec;
+  --panel:rgba(255,255,255,.96);
+  --panel-line:#ffffff;
+  --ink:#0d1530;
+  --ink-2:#3b4664;
+  --ink-3:#6b7593;
+  --line:#d6deed;
+  --accent:#1d54ff;
+  --accent-soft:#dbe5ff;
+  --good:#00965a;
+  --good-soft:#d2f4e3;
+  --warn:#e8650a;
+  --warn-soft:#ffe6d2;
+  --bad:#e0263b;
+  --shadow:0 12px 32px rgba(20,36,90,.22),0 1px 3px rgba(20,36,90,.12);
+  --f-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Consolas,monospace;
+  color-scheme:light;
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--sky);color:var(--ink);font-family:var(--f-body);font-size:13px;overflow:hidden}
+#app{position:relative;height:100%;width:100%;overflow:hidden}
+#scene{position:absolute;inset:0;display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#scene.drag{cursor:grabbing}
+#scene.hot{cursor:pointer}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.card{background:var(--panel);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--panel-line);box-shadow:var(--shadow);border-radius:14px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* top bar */
+.top{position:absolute;left:0;right:0;top:0;height:60px;display:flex;align-items:center;gap:14px;padding-inline:16px;background:var(--panel);border-bottom:1px solid var(--line);z-index:8}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:17px;white-space:nowrap}
+.brand svg{width:26px;height:26px}
+.search{position:relative;flex:1;max-width:420px}
+.search label{display:flex;align-items:center;gap:8px;height:38px;padding-inline:12px;border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--ink-3)}
+.search input{flex:1;min-width:0;border:0;outline:0;background:none;font:inherit;color:var(--ink);font-size:13px}
+.search kbd{font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:var(--ink-3)}
+.pop{position:absolute;top:calc(100% + 6px);padding:6px;z-index:9}
+.res{left:0;right:0}
+.res button{width:100%;display:grid;grid-template-columns:64px 1fr auto;gap:10px;align-items:center;padding:8px;border-radius:8px;text-align:left}
+.res button:hover,.res button.on{background:var(--accent-soft)}
+.res small{color:var(--ink-3)}
+.res .k{font-size:11px;color:var(--accent);font-weight:700}
+.spacer{flex:1}
+.sitebox{position:relative;display:flex;align-items:stretch;border:1px solid var(--line);border-radius:10px;background:#fff;height:44px}
+.sitebtn{display:flex;align-items:center;gap:10px;padding:0 10px 0 6px;text-align:left;min-width:0}
+.site-code{font-family:var(--f-mono);font-weight:700;font-size:11px;color:#fff;background:var(--accent);border-radius:7px;padding:6px 7px}
+.sitebtn b{display:block;font-size:13px;white-space:nowrap}
+.sitebtn small{color:var(--ink-3);font-size:11px;white-space:nowrap}
+.sitebox .sep{border-left:1px solid var(--line);width:36px;display:grid;place-items:center;color:var(--ink-2)}
+.sites{right:0;width:320px}
+.sites button{width:100%;display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;text-align:left}
+.sites button:hover,.sites button.on{background:var(--accent-soft)}
+.sites b{display:block}
+.sites small{color:var(--ink-3)}
+.live{display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:999px;background:var(--good-soft);color:var(--good);font-weight:700;white-space:nowrap}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--good);animation:pulse 1.8s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(0,150,90,.5)}70%{box-shadow:0 0 0 7px rgba(0,150,90,0)}100%{box-shadow:0 0 0 0 rgba(0,150,90,0)}}
+.bell{position:relative;width:38px;height:38px;border-radius:10px;display:grid;place-items:center;color:var(--ink-2)}
+.bell:hover{background:var(--accent-soft)}
+.bell i{position:absolute;top:8px;right:9px;width:8px;height:8px;border-radius:50%;background:var(--bad);border:2px solid #fff}
+.notes{right:0;width:320px;padding:8px}
+.notes h4{margin:4px 6px 8px;font-size:13px}
+.notes div{display:flex;gap:10px;padding:8px 6px;border-top:1px solid var(--line)}
+.notes div span{width:8px;height:8px;border-radius:50%;margin-top:6px;flex:none;background:var(--c)}
+.notes small{display:block;color:var(--ink-3);font-family:var(--f-mono)}
+.user{display:flex;align-items:center;gap:10px;white-space:nowrap}
+.avatar{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#1d54ff,#6b93ff);color:#fff;font-weight:700}
+.user b{display:block;font-size:13px}
+.user small{color:var(--ink-3);font-size:11px}
+
+/* KPI row */
+.kpis{position:absolute;top:76px;left:16px;display:flex;gap:12px;z-index:3;max-width:calc(100% - 32px)}
+.kpi{display:flex;gap:12px;align-items:center;padding:12px 16px 12px 12px;min-width:190px}
+.ki{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);flex:none}
+.ki svg{width:22px;height:22px}
+.kpi small{display:block;color:var(--ink-2);font-size:12px}
+.kpi .v{display:flex;align-items:baseline;gap:8px;margin-block:1px}
+.kpi .v b{font-family:var(--f-mono);font-size:23px;font-weight:700;letter-spacing:-.02em}
+.kpi .v em{font-style:normal;font-family:var(--f-mono);font-size:11.5px;color:var(--good);font-weight:700}
+.kpi .sub{color:var(--ink-3);font-size:11px}
+.hint{align-self:flex-start;color:var(--ink-2);font-size:11.5px;padding:6px 10px;white-space:nowrap;background:var(--panel);border-radius:999px;box-shadow:var(--shadow)}
+
+/* map controls */
+.ctl{position:absolute;top:76px;right:378px;display:flex;flex-direction:column;padding:4px;gap:2px;z-index:3}
+.ctl button{width:36px;height:36px;border-radius:9px;display:grid;place-items:center;color:var(--ink-2)}
+.ctl button:hover{background:var(--accent-soft);color:var(--accent)}
+.ctl svg{width:18px;height:18px}
+.ctl hr{border:0;border-top:1px solid var(--line);margin:3px 6px}
+
+/* detail panel */
+.detail{position:absolute;top:76px;right:16px;width:350px;max-height:calc(100% - 330px);overflow:auto;padding:16px;z-index:4}
+.dh{display:flex;gap:12px;align-items:center}
+.dh .ico{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;background:#eef2fb;flex:none}
+.dh .ico svg{width:30px;height:30px}
+.dh .eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--accent)}
+.dh h2{margin:0;font-size:18px;line-height:1.3}
+.dh h2.id{font-family:var(--f-mono);letter-spacing:-.01em}
+.dh p{margin:0;color:var(--ink-3);font-size:12px}
+.dh .acts{margin-left:auto;align-self:flex-start;display:flex;gap:4px}
+.dh .acts button{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--ink-2);border:1px solid var(--line)}
+.dh .acts button:hover{background:#eef2f9}
+.dh .acts button[aria-pressed="true"]{background:var(--accent);color:#fff;border-color:var(--accent)}
+.dstate{display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line);color:var(--ink-2);font-size:12px;flex-wrap:wrap}
+.prog{display:flex;align-items:center;gap:10px;margin-top:10px}
+.prog .bar{flex:1}
+.prog small{color:var(--ink-3);font-size:11.5px;white-space:nowrap}
+.bar{display:block;height:6px;background:#e3e8f2;border-radius:6px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:6px}
+.bar.good i{background:var(--good)}
+.bar.warn i{background:var(--warn)}
+dl.kv{display:grid;grid-template-columns:auto 1fr;gap:9px 12px;margin:14px 0 0;padding-top:14px;border-top:1px solid var(--line)}
+dl.kv dt{color:var(--ink-2)}
+dl.kv dd{margin:0;text-align:right;font-weight:500;min-width:0}
+dl.kv dd.link{color:var(--accent);font-family:var(--f-mono)}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.tile{background:#f3f6fc;border-radius:10px;padding:9px 10px}
+.tile small{display:block;color:var(--ink-2);font-size:11.5px}
+.tile b{font-family:var(--f-mono);font-size:17px}
+.tile span{color:var(--ink-3);font-size:11.5px;margin-left:3px}
+.tile .bar{margin-top:6px}
+.sec{display:flex;justify-content:space-between;align-items:baseline;margin:14px 0 6px;font-weight:700}
+.sec small{font-weight:400;color:var(--ink-3)}
+ul.inv{list-style:none;margin:0;padding:0}
+ul.inv li{display:grid;grid-template-columns:22px 1fr auto 52px;gap:10px;align-items:center;padding:6px 0;border-top:1px solid #edf0f6}
+ul.inv li:first-child{border-top:0}
+ul.inv .sw{width:20px;height:20px;border-radius:6px;background:var(--c)}
+ul.inv b{font-family:var(--f-mono);text-align:right}
+ul.inv .pill{justify-content:center}
+.flrow{display:grid;grid-template-columns:auto 1fr 70px auto;gap:10px;align-items:center;padding:6px 0;font-size:12px}
+.flrow b{font-family:var(--f-mono)}
+.flrow span{color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pill{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:7px;font-size:12px;font-weight:700;white-space:nowrap}
+.pill.acc{background:var(--accent-soft);color:var(--accent)}
+.pill.good{background:var(--good-soft);color:var(--good)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.mute{background:#eaeef5;color:var(--ink-3)}
+
+/* shipment tracking */
+.track{position:absolute;left:16px;bottom:16px;width:min(780px,calc(100% - 446px));display:flex;gap:16px;padding:16px;z-index:3}
+.track .steps{flex:1;min-width:0}
+.th{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px}
+.th h3{margin:0;font-size:15px;display:flex;align-items:center;gap:8px}
+.th h3 svg{width:20px;height:20px;color:var(--accent)}
+.th small{color:var(--ink-3)}
+ol.stp{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,1fr)}
+ol.stp li{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:5px;font-size:12px}
+ol.stp li::before{content:"";position:absolute;top:16px;left:-50%;width:100%;height:3px;background:#e0e6f1}
+ol.stp li:first-child::before{display:none}
+ol.stp li.done::before,ol.stp li.cur::before{background:var(--accent)}
+ol.stp .dotc{position:relative;z-index:1;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#eaeef6;color:var(--ink-3);border:2px solid #fff}
+ol.stp .dotc svg{width:16px;height:16px}
+ol.stp li.done .dotc{background:var(--accent);color:#fff}
+ol.stp li.cur .dotc{background:#fff;color:var(--accent);box-shadow:0 0 0 2px var(--accent),0 0 0 7px rgba(29,84,255,.15)}
+ol.stp b{font-weight:500}
+ol.stp time{font-family:var(--f-mono);font-size:11px;color:var(--ink-3)}
+.ship{width:230px;flex:none;border-radius:12px;background:#f2f5fc;padding:12px;display:flex;flex-direction:column;gap:3px;justify-content:center}
+.ship b{font-family:var(--f-mono);font-size:14px}
+.ship small{color:var(--ink-2)}
+.ship .pill{align-self:flex-start;margin-block:4px}
+
+/* fleet list */
+.fleet{position:absolute;right:16px;bottom:16px;width:398px;padding:12px;z-index:3;display:flex;flex-direction:column;max-height:calc(100% - 150px)}
+.tabs{display:flex;align-items:center;gap:4px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.tabs button{height:30px;padding:0 10px;border-radius:8px;color:var(--ink-2);font-weight:500;white-space:nowrap}
+.tabs button span{color:var(--ink-3);font-family:var(--f-mono);font-size:11.5px;margin-left:4px}
+.tabs button[aria-selected="true"]{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(20,36,90,.2)}
+.tabs .where{margin-left:auto;color:var(--ink-3);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rows{overflow:auto;min-height:0}
+.row{width:100%;display:grid;grid-template-columns:82px 1fr auto 60px;align-items:center;gap:10px;padding:8px 6px;border-radius:9px;text-align:left}
+.row+.row{border-top:1px solid #edf0f6}
+.row:hover{background:#f1f5fe}
+.row.sel{background:var(--accent-soft)}
+.row b{font-family:var(--f-mono);font-size:12.5px;display:block}
+.row small{color:var(--ink-3);font-size:11px}
+.rloc{display:flex;align-items:center;gap:7px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink-2)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--c);flex:none}
+.rprog small{display:block;margin-top:4px;font-family:var(--f-mono);text-align:right}
+
+/* floating tag */
+.tag{position:absolute;left:0;top:0;z-index:2;pointer-events:none;display:flex;align-items:center;gap:6px;padding:5px 9px;border-radius:8px;background:var(--accent);color:#fff;font-family:var(--f-mono);font-size:12px;font-weight:700;box-shadow:0 6px 16px rgba(29,84,255,.4);white-space:nowrap}
+.tag span{font-family:var(--f-body);font-weight:500;font-size:11px;background:rgba(255,255,255,.22);border-radius:5px;padding:1px 6px}
+.tag::after{content:"";position:absolute;left:50%;bottom:-5px;width:10px;height:10px;background:var(--accent);transform:translateX(-50%) rotate(45deg);z-index:-1}
+
+@media (max-width:1240px){.user div,.hint{display:none}}
+@media (max-width:1060px){.track{display:none}.live{display:none}}
+@media (max-width:760px){
+  .search,.user,.bell{display:none}
+  .sitebtn small{display:none}
+  .kpis{overflow-x:auto;scrollbar-width:none;padding-bottom:4px}
+  .kpi{min-width:160px}
+  .kpi .v b{font-size:19px}
+  .ctl{top:auto;bottom:calc(34% + 32px);right:16px}
+  .fleet{left:16px;right:16px;width:auto;max-height:34%}
+  .detail{top:auto;bottom:16px;left:16px;right:16px;width:auto;max-height:56%;z-index:6}
+  .detail.site{display:none}
+  .row{grid-template-columns:76px 1fr auto}
+  .row .rprog{display:none}
+  .sites{right:-40px;width:min(320px,calc(100vw - 32px))}
+}
+@media (prefers-reduced-motion:reduce){.live i{animation:none}}
+</style>
+
+</head>
+<body>
+<div id="app">
+  <canvas id="scene" aria-label="物流場站 3D 即時畫面"></canvas>
+  <div class="tag" id="tag" hidden></div>
+
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3 28 9.5v13L16 29 4 22.5v-13Z" fill="#1d54ff"/><path d="M16 3 28 9.5 16 16 4 9.5Z" fill="#6b93ff"/><path d="M16 16v13l12-6.5v-13Z" fill="#1238b8"/></svg>
+      <span>DockSight</span>
+    </div>
+    <div class="search">
+      <label><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="q" type="search" placeholder="搜尋據點、車輛、堆高機、貨品、出貨單…" autocomplete="off"><kbd>/</kbd></label>
+      <div class="pop card res" id="res" hidden></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="sitebox">
+      <button class="sitebtn" id="siteBtn" aria-haspopup="true"><span class="site-code" id="siteCode">WH-01</span><div><b id="siteName">林口物流園區</b><small id="siteSub"></small></div></button>
+      <button class="sep" id="siteNext" title="下一個據點" aria-label="下一個據點"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m9 6 6 6-6 6"/></svg></button>
+      <div class="pop card sites" id="siteMenu" hidden></div>
+    </div>
+    <div class="live"><i></i>即時 <span class="mono" id="clock">--:--</span></div>
+    <div style="position:relative">
+      <button class="bell" id="bell" aria-label="通知"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15Z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><i></i></button>
+      <div class="pop card notes" id="notes" hidden></div>
+    </div>
+    <div class="user"><span class="avatar">陳</span><div><b>陳以安</b><small>營運經理</small></div></div>
+  </header>
+
+  <section class="kpis" aria-label="據點指標">
+    <div class="kpi card"><span class="ki"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 21 6.5v11L12 22l-9-4.5v-11Z" opacity=".35"/><path d="M12 2 21 6.5 12 11 3 6.5Z"/><path d="M12 11v11l9-4.5v-11Z" opacity=".7"/></svg></span>
+      <div><small>在庫棧板</small><div class="v"><b id="kStock">0</b><em id="kStockD"></em></div><small class="sub" id="kStockS"></small></div></div>
+    <div class="kpi card"><span class="ki"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 6h12v10H2z"/><path d="M14 9h4l3 3.5V16h-7z" opacity=".7"/><circle cx="6" cy="17.5" r="2"/><circle cx="17" cy="17.5" r="2"/></svg></span>
+      <div><small>場內車輛</small><div class="v"><b id="kTrucks">0</b><em id="kTrucksD"></em></div><small class="sub" id="kTrucksS"></small></div></div>
+    <div class="kpi card"><span class="ki"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9" fill="currentColor" fill-opacity=".18"/><path d="M12 7v5l3 2"/></svg></span>
+      <div><small>準時交貨率</small><div class="v"><b id="kOn">0</b><em id="kOnD"></em></div><small class="sub" id="kOnS"></small></div></div>
+    <div class="hint">示範資料 · 拖曳平移、滾輪縮放、點選車輛／堆高機／貨品看詳情</div>
+  </section>
+
+  <nav class="ctl card" aria-label="視角控制">
+    <button id="zin" title="放大" aria-label="放大"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button id="zout" title="縮小" aria-label="縮小"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/></svg></button>
+    <hr>
+    <button id="rl" title="向左旋轉" aria-label="向左旋轉"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4h4"/></svg></button>
+    <button id="rr" title="向右旋轉" aria-label="向右旋轉"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12a8 8 0 1 1-2.4-5.7"/><path d="M20 4v4h-4"/></svg></button>
+    <button id="home" title="回到據點全景" aria-label="回到據點全景"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 11 9-7 9 7v9h-6v-6H9v6H3z"/></svg></button>
+  </nav>
+
+  <aside class="detail card" id="detail" aria-live="polite"></aside>
+  <section class="track card" id="track"></section>
+  <section class="fleet card">
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="docks" aria-selected="false">碼頭<span id="tDocks"></span></button>
+      <button role="tab" data-tab="forklifts" aria-selected="false">堆高機<span id="tFl"></span></button>
+      <button role="tab" data-tab="trucks" aria-selected="true">車輛<span id="tTr"></span></button>
+      <span class="where" id="tWhere"></span>
+    </div>
+    <div class="rows" id="rows"></div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const app = $('app'), canvas = $('scene');
+const ACC = '#1d54ff';
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+/* ================= renderer ================= */
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#c9d5ec');
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -300, 500);
+scene.add(new THREE.HemisphereLight('#ffffff', '#7f8db0', 0.62));
+const sun = new THREE.DirectionalLight('#fff8ec', 0.88);
+const SUN_OFF = new THREE.Vector3(-26, 44, 30);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -55, right: 55, top: 55, bottom: -55, near: 1, far: 180 });
+sun.shadow.bias = -0.0006;
+scene.add(sun, sun.target);
+
+/* ================= helpers ================= */
+const GC = new Map(), MC = new Map(), TC = new Map();
+const G = (w, h, d) => { const k = w + '|' + h + '|' + d; if (!GC.has(k)) GC.set(k, new THREE.BoxGeometry(w, h, d)); return GC.get(k); };
+function M(c, o) {
+  if (o) return new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: .8, metalness: 0 }, o));
+  if (!MC.has(c)) MC.set(c, new THREE.MeshStandardMaterial({ color: c, roughness: .8, metalness: 0 }));
+  return MC.get(c);
+}
+function box(p, w, h, d, mat, x, y, z, cast = true) {
+  const m = new THREE.Mesh(G(w, h, d), typeof mat === 'string' ? M(mat) : mat);
+  m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; p.add(m); return m;
+}
+function plane(p, w, d, mat, x, z, y = .01) {
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), typeof mat === 'string' ? M(mat) : mat);
+  m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.receiveShadow = true; p.add(m); return m;
+}
+const DRAWS = [];
+function tex(key, w, h, draw) {
+  if (TC.has(key)) return TC.get(key);
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4;
+  const run = () => { const g = c.getContext('2d'); g.clearRect(0, 0, w, h); draw(g, w, h); t.needsUpdate = true; };
+  run(); DRAWS.push(run); TC.set(key, t); return t;
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => DRAWS.forEach(f => f()));
+function sign(p, text, w, h, opts, x, y, z, ry = 0, flatOn = false) {
+  const { fg = '#fff', bg = ACC, font = '700 64px "Noto Sans TC",sans-serif', px = 512 } = opts;
+  const t = tex(`sign|${text}|${fg}|${bg}|${font}|${w}|${h}`, px, Math.round(px * h / w), (g, W, H) => {
+    if (bg) { g.fillStyle = bg; g.beginPath(); const r = H * .18; g.moveTo(r, 0); g.arcTo(W, 0, W, H, r); g.arcTo(W, H, 0, H, r); g.arcTo(0, H, 0, 0, r); g.arcTo(0, 0, W, 0, r); g.fill(); }
+    g.fillStyle = fg; g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, W / 2, H / 2 + 3);
+  });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: t, transparent: true, toneMapped: false }));
+  m.position.set(x, y, z);
+  if (flatOn) m.rotation.set(-Math.PI / 2, 0, ry); else m.rotation.y = ry;
+  p.add(m); return m;
+}
+const lerpAng = (a, b, f) => { let d = (b - a) % (Math.PI * 2); if (d > Math.PI) d -= Math.PI * 2; if (d < -Math.PI) d += Math.PI * 2; return a + d * f; };
+const V = (x, z) => new THREE.Vector3(x, 0, z);
+
+/* ================= registry ================= */
+const pickables = [], ALL = [];
+function reg(ent, obj) { obj.traverse(o => { if (o.isMesh) { o.userData.ent = ent; pickables.push(o); } }); }
+
+/* ================= world ground ================= */
+plane(scene, 1400, 400, '#b9c7e2', 200, 0, 0);
+
+/* ================= shared builders ================= */
+const CARD = ['#e3a14f', '#d48d3c', '#efb266'];
+function stackInto(grp, cols, rows, layers, kind = 'card') {
+  for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) {
+    const x = (c - (cols - 1) / 2) * 1.38, z = (r - (rows - 1) / 2) * 1.38;
+    box(grp, 1.25, .16, 1.25, '#b5763a', x, .08, z);
+    const h = Math.max(1, layers - ((c + r) % 2 ? 1 : 0));
+    if (kind === 'card') for (let l = 0; l < h; l++) box(grp, 1.12, .6, 1.12, CARD[(c + r + l) % 3], x, .47 + l * .64, z);
+    else box(grp, 1.15, h * .64, 1.15, { wrap: '#2f63ff', white: '#f2f6ff', yellow: '#ffc21a', teal: '#14b8a6' }[kind], x, .16 + h * .32, z);
+  }
+}
+function decoStack(S, x, z, cols, rows, layers, kind) { const g = new THREE.Group(); g.position.set(x, 0, z); S.g.add(g); stackInto(g, cols, rows, layers, kind); return g; }
+function tree(p, x, z, s = 1) {
+  box(p, .34 * s, 1.5 * s, .34 * s, '#8a5a34', x, .75 * s, z);
+  const c = new THREE.Mesh(new THREE.IcosahedronGeometry(1.3 * s, 1), M(rnd() > .5 ? '#1fae6c' : '#3cc983', { flatShading: true, roughness: .9 }));
+  c.position.set(x, 2.5 * s, z); c.scale.set(1, 1.2, 1); c.castShadow = true; p.add(c);
+}
+function bush(p, x, z) { const b = new THREE.Mesh(new THREE.SphereGeometry(.6, 10, 8), M('#2fbf7e', { flatShading: true })); b.scale.y = .6; b.position.set(x, .3, z); b.castShadow = true; p.add(b); }
+const fenceMat = M('#7d89a6'), meshMat = new THREE.MeshStandardMaterial({ color: '#a9b5ce', transparent: true, opacity: .4, side: THREE.DoubleSide });
+function fence(p, x1, z1, x2, z2) {
+  const g = new THREE.Group(), L = Math.hypot(x2 - x1, z2 - z1);
+  g.position.set((x1 + x2) / 2, 0, (z1 + z2) / 2); g.rotation.y = Math.atan2(-(z2 - z1), x2 - x1);
+  const n = Math.max(1, Math.round(L / 3.2));
+  for (let i = 0; i <= n; i++) box(g, .12, 1.5, .12, fenceMat, -L / 2 + i * L / n, .75, 0);
+  box(g, L, .08, .08, fenceMat, 0, 1.45, 0); box(g, L, .08, .08, fenceMat, 0, .25, 0);
+  const pl = new THREE.Mesh(new THREE.PlaneGeometry(L, 1.2), meshMat); pl.position.y = .85; g.add(pl);
+  p.add(g);
+}
+function office(p, x, z, w, d, h) {
+  const t = tex(`win|${w}|${h}`, 256, 256, (g, W, H) => {
+    g.fillStyle = '#e9eef8'; g.fillRect(0, 0, W, H);
+    const cols = Math.max(2, Math.round(w / 1.6)), rows = Math.max(2, Math.round(h / 1.6));
+    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) { g.fillStyle = (i + j) % 5 ? '#5f86e8' : '#86a6f4'; g.fillRect(i * W / cols + 6, j * H / rows + 7, W / cols - 12, H / rows - 14); }
+  });
+  const side = new THREE.MeshStandardMaterial({ map: t, roughness: .7 }), top = M('#d7deec');
+  const m = new THREE.Mesh(G(w, h, d), [side, side, top, top, side, side]);
+  m.position.set(x, h / 2, z); m.castShadow = true; m.receiveShadow = true; p.add(m);
+}
+const triCache = new Map();
+function triGeo(seg, rise) {
+  const k = seg + '|' + rise; if (triCache.has(k)) return triCache.get(k);
+  const s = new THREE.Shape(); s.moveTo(-seg / 2, 0); s.lineTo(seg / 2, 0); s.lineTo(0, rise); s.closePath();
+  const g = new THREE.ExtrudeGeometry(s, { depth: .14, bevelEnabled: false }); triCache.set(k, g); return g;
+}
+function building(S, o) {
+  const { x, w, d, h, wall, roof, trim = ACC, type = 'flat', mods = 1, zf = -2, roofSign, roofFg = '#ffffff' } = o;
+  const g = new THREE.Group(); S.g.add(g);
+  const zb = zf - d, zc = zf - d / 2;
+  box(g, w, h, d, wall, x, h / 2, zc);
+  for (const sx of [-1, 1]) for (const sz of [zf, zb]) box(g, .32, h + .05, .32, trim, x + sx * w / 2, h / 2, sz);
+  box(g, w + .1, .3, .1, trim, x, .15, zf + .02, false);
+  if (type === 'flat') {
+    box(g, w + .5, .45, d + .5, roof, x, h + .22, zc);
+    box(g, w + .6, .55, .25, trim, x, h + .3, zf + .2); box(g, w + .6, .55, .25, trim, x, h + .3, zb - .2);
+    box(g, .25, .55, d + .6, trim, x - w / 2 - .2, h + .3, zc); box(g, .25, .55, d + .6, trim, x + w / 2 + .2, h + .3, zc);
+    if (roofSign) sign(g, roofSign, Math.min(w * .7, 22), 2.2, { bg: null, fg: roofFg, font: '700 62px "Noto Sans TC",sans-serif', px: 1024 }, x, h + .47, zc + d * .18, 0, true);
+  } else {
+    const seg = w / mods, a = .33, rise = Math.tan(a) * seg / 2, L = seg / 2 / Math.cos(a) + .3;
+    for (let i = 0; i < mods; i++) {
+      const cx = x - w / 2 + seg * (i + .5);
+      for (const s of [-1, 1]) { const m = box(g, L, .28, d + .7, roof, cx + s * seg / 4, h + rise / 2 + .08, zc); m.rotation.z = -s * a; }
+      for (const zz of [zf - .07, zb - .07]) { const t = new THREE.Mesh(triGeo(seg, rise), M(wall)); t.position.set(cx, h, zz); t.castShadow = true; g.add(t); }
+      box(g, .2, .2, d + .7, trim, cx, h + rise + .12, zc);
+    }
+  }
+  reg(S, g);
+  return { g, zf, zb, h, x, w };
+}
+function openDoor(S, x, zf, w = 3.4, h = 3.6) {
+  const g = S.g;
+  box(g, .22, h + .1, .18, ACC, x - w / 2 - .11, (h + .1) / 2, zf + .06); box(g, .22, h + .1, .18, ACC, x + w / 2 + .11, (h + .1) / 2, zf + .06);
+  box(g, w + .44, .22, .18, ACC, x, h + .1, zf + .06);
+  const op = new THREE.Mesh(new THREE.PlaneGeometry(w, h), M('#1c2440')); op.position.set(x, h / 2, zf + .02); g.add(op);
+  box(g, 1.2, .14, 1.2, '#b5763a', x - .65, .62, zf + .2); box(g, 1.1, .62, 1.1, CARD[0], x - .65, 1.0, zf + .2); box(g, 1.1, .62, 1.1, CARD[2], x - .65, 1.64, zf + .2);
+  box(g, 1.2, .14, 1.2, '#b5763a', x + .65, .62, zf + .2); box(g, 1.1, .62, 1.1, CARD[1], x + .65, 1.0, zf + .2);
+}
+function dock(S, x, label, zf = -2) {
+  const g = S.g;
+  openDoor(S, x, zf);
+  box(g, 3.4, .55, .8, '#4f5a73', x, .27, zf + .4);
+  box(g, .3, .5, .25, '#232a3b', x - 1.45, .8, zf + .2); box(g, .3, .5, .25, '#232a3b', x + 1.45, .8, zf + .2);
+  sign(g, label, 1.25, .55, { font: '700 54px "Noto Sans TC",sans-serif', px: 384 }, x - .7, 4.25, zf + .08);
+  const light = box(g, .5, .24, .12, M('#9aa3b6', { emissive: '#000000' }), x + .9, 4.25, zf + .08, false);
+  plane(g, .16, 8, '#ffc21a', x - 2.7, zf + 4, .02); plane(g, .16, 8, '#ffc21a', x + 2.7, zf + 4, .02);
+  const dk = { x, label, light, zf, S };
+  S.docks.push(dk); return dk;
+}
+function rack(S, x, z, len, lev, ry = 0) {
+  const r = new THREE.Group(); r.position.set(x, 0, z); r.rotation.y = ry; S.g.add(r);
+  const n = Math.max(1, Math.round(len / 2.2)), H = lev * 1.45 + .2;
+  for (let i = 0; i <= n; i++) { const px = -len / 2 + i * len / n; for (const s of [-.62, .62]) box(r, .12, H, .12, ACC, px, H / 2, s); }
+  for (let l = 0; l < lev; l++) {
+    const y = l * 1.45 + .12;
+    for (const s of [-.62, .62]) box(r, len, .12, .1, '#ff8a1f', 0, y, s);
+    for (let i = 0; i < n; i++) if (rnd() > .2) {
+      const bx = -len / 2 + (i + .5) * len / n;
+      box(r, 1.0, .12, 1.0, '#b5763a', bx, y + .12, 0); box(r, .95, .72, .95, CARD[(i + l) % 3], bx, y + .55, 0);
+    }
+  }
+}
+function container(S, x, z, ry, color, text, y = 0) {
+  const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; S.g.add(g);
+  box(g, 6, 2.6, 2.44, color, 0, 1.3, 0);
+  const dark = '#' + new THREE.Color(color).offsetHSL(0, 0, -.08).getHexString();
+  for (let i = 0; i < 13; i++) box(g, .07, 2.4, 2.5, dark, -2.85 + i * .475, 1.3, 0, false);
+  sign(g, text, 4.6, .8, { bg: null, fg: '#ffffff', font: '700 70px "Noto Sans TC",sans-serif' }, 0, 1.7, 1.27);
+}
+function chiller(S, x, y, z) {
+  box(S.g, 2.2, .8, 1.7, '#c3cbdb', x, y + .4, z);
+  for (const dx of [-.5, .5]) { const f = new THREE.Mesh(new THREE.CylinderGeometry(.42, .42, .06, 20), M('#2a3147')); f.position.set(x + dx, y + .83, z); S.g.add(f); }
+}
+
+/* ================= vehicles ================= */
+const CARR = {
+  ds: { name: 'DockSight', zh: 'DockSight 自有車隊', mark: 'D', color: '#1d54ff', cab: 'full', slogan: '自有車隊・全台配送' },
+  bc: { name: '北辰物流', zh: '北辰物流', mark: '北', color: '#00a99d', cab: 'band', slogan: '全台當日配' },
+  jy: { name: '嘉運通', zh: '嘉運通運輸', mark: '嘉', color: '#ff6f00', cab: 'band', slogan: '南北快線' },
+  lf: { name: '藍峰運輸', zh: '藍峰運輸', mark: '藍', color: '#1f3a93', cab: 'full', slogan: '冷鏈・重件' },
+};
+function sideTex(c) {
+  return tex('side|' + c.name, 512, 220, (g, W, H) => {
+    g.fillStyle = '#fbfcff'; g.fillRect(0, 0, W, H);
+    g.fillStyle = c.color; g.fillRect(0, H - 42, W, 42); g.fillRect(0, H - 54, W * .62, 8);
+    g.fillRect(34, 44, 92, 92);
+    g.fillStyle = '#fff'; g.font = '700 58px "Noto Sans TC",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(c.mark, 80, 93);
+    g.fillStyle = c.color; g.textAlign = 'left'; g.font = '700 62px "Noto Sans TC",sans-serif'; g.fillText(c.name, 146, 80);
+    g.fillStyle = '#5b6582'; g.font = '500 28px "Noto Sans TC",sans-serif'; g.fillText(c.slogan, 148, 128);
+  });
+}
+function makeTruck(tr) {
+  const c = CARR[tr.c], g = new THREE.Group();
+  const col = M(c.color, { roughness: .45 }), white = M('#fbfcff', { roughness: .5 }), glass = M('#26314d', { roughness: .2, metalness: .3 });
+  box(g, 5.6, 2.5, 2.3, white, -.9, 2.05, 0);
+  box(g, 5.6, .3, 2.1, '#4a5469', -.9, .65, 0);
+  const st = sideTex(c);
+  for (const s of [1, -1]) {
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(5.5, 2.36), new THREE.MeshStandardMaterial({ map: st, roughness: .6 }));
+    p.position.set(-.9, 2.05, s * 1.156); if (s < 0) p.rotation.y = Math.PI; g.add(p);
+    box(g, .62, .55, .02, glass, 2.9, 2.05, s * 1.11);
+  }
+  box(g, 1.55, 2.0, 2.2, c.cab === 'full' ? col : white, 2.78, 1.55, 0);
+  if (c.cab !== 'full') box(g, 1.57, .55, 2.22, col, 2.78, .85, 0);
+  box(g, .05, .8, 1.9, glass, 3.56, 2.0, 0);
+  box(g, .07, .2, .4, M('#fff7d6', { emissive: '#fff1b0', emissiveIntensity: .6 }), 3.57, .9, .75);
+  box(g, .07, .2, .4, M('#fff7d6', { emissive: '#fff1b0', emissiveIntensity: .6 }), 3.57, .9, -.75);
+  const wg = new THREE.CylinderGeometry(.44, .44, .32, 18);
+  for (const x of [-3.0, -2.05, 2.75]) for (const z of [1.0, -1.0]) { const w = new THREE.Mesh(wg, M('#262c3a')); w.rotation.x = Math.PI / 2; w.position.set(x, .44, z); w.castShadow = true; g.add(w); }
+  return g;
+}
+function makeForklift() {
+  const g = new THREE.Group();
+  box(g, 1.5, .7, 1.1, M('#ffb000', { roughness: .5 }), 0, .65, 0);
+  box(g, .4, .8, 1.1, '#232a3b', -.78, .72, 0);
+  for (const [px, pz] of [[-.45, .45], [-.45, -.45], [.4, .45], [.4, -.45]]) box(g, .07, 1.15, .07, '#232a3b', px, 1.55, pz);
+  box(g, 1.0, .08, 1.0, '#232a3b', 0, 2.15, 0);
+  box(g, .4, .5, .4, '#ff7a1a', -.15, 1.28, 0);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.17, 12, 10), M('#f1c7a0')); head.position.set(-.15, 1.7, 0); g.add(head);
+  const hat = new THREE.Mesh(new THREE.SphereGeometry(.19, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), M('#ffd23a')); hat.position.set(-.15, 1.76, 0); g.add(hat);
+  box(g, .12, 2.2, .9, '#232a3b', .85, 1.12, 0);
+  box(g, 1.0, .06, .12, '#232a3b', 1.38, .32, .3); box(g, 1.0, .06, .12, '#232a3b', 1.38, .32, -.3);
+  const load = new THREE.Group(); g.add(load);
+  box(load, 1, .14, 1, '#b5763a', 1.42, .43, 0); box(load, .95, .72, .95, CARD[0], 1.42, .86, 0);
+  const wg = new THREE.CylinderGeometry(.3, .3, .22, 14);
+  for (const [px, pz] of [[.5, .58], [.5, -.58], [-.5, .58], [-.5, -.58]]) { const w = new THREE.Mesh(wg, M('#232a3b')); w.rotation.x = Math.PI / 2; w.position.set(px, .3, pz); g.add(w); }
+  g.userData.load = load;
+  return g;
+}
+function buildPath(dk) {
+  const X = dk.x, zf = dk.zf;
+  const f = new THREE.CatmullRomCurve3([V(-82, 14.5), V(-20, 14.5), V(11, 14.5), V(17, 14), V(20.4, 11.6), V(19.4, 9.5), V(15, 8.7), V(X - 5.5, 8.7)], false, 'centripetal');
+  const r = new THREE.CatmullRomCurve3([V(X - 5.5, 8.7), V(X - 1.8, 7.9), V(X - .1, 5.4), V(X, zf + 3.8)], false, 'centripetal');
+  const S = [];
+  [[f, false], [r, true]].forEach(([c, rev]) => {
+    const n = Math.max(2, Math.round(c.getLength() / .25));
+    for (let i = 0; i <= n; i++) {
+      if (rev && i === 0) continue;
+      const u = i / n, p = c.getPointAt(u), tg = c.getTangentAt(u);
+      let h = Math.atan2(-tg.z, tg.x); if (rev) h += Math.PI;
+      S.push({ p, h, rev, d: 0 });
+    }
+  });
+  for (let i = 1; i < S.length; i++) S[i].d = S[i - 1].d + S[i].p.distanceTo(S[i - 1].p);
+  return { S, len: S[S.length - 1].d, revStart: S.find(s => s.rev).d };
+}
+function sampleAt(tr, t) {
+  const S = tr.path.S;
+  if (t < S[tr.si].d) tr.si = 0;
+  while (tr.si < S.length - 2 && S[tr.si + 1].d < t) tr.si++;
+  const a = S[tr.si], b = S[tr.si + 1], f = Math.min(1, Math.max(0, (t - a.d) / ((b.d - a.d) || 1)));
+  return { x: a.p.x + (b.p.x - a.p.x) * f, z: a.p.z + (b.p.z - a.p.z) * f, h: lerpAng(a.h, b.h, f), rev: b.rev };
+}
+function placeTruck(tr) { const s = sampleAt(tr, tr.t); tr.obj.position.set(s.x, 0, s.z); tr.obj.rotation.y = s.h; tr.pos = s; }
+
+function addTruck(S, o) {
+  const tr = Object.assign({ kind: 'truck', S, si: 0, v: 0, timer: 0 }, o);
+  tr.dk = S.docks[o.dock - 1];
+  tr.path = buildPath(tr.dk);
+  tr.obj = makeTruck(tr); S.g.add(tr.obj); reg(tr, tr.obj);
+  tr.mover = tr.state === 'enroute' || tr.state === 'docking';
+  if (tr.state === 'enroute') tr.t = tr.path.S.find(s => s.p.x > -36).d;
+  else if (tr.state === 'docking') tr.t = tr.path.revStart - 3;
+  else tr.t = tr.path.len;
+  tr.fp = [8.4, 3.3]; tr.tagY = 4.7;
+  placeTruck(tr); S.trucks.push(tr); ALL.push(tr); return tr;
+}
+function addForklift(S, o) {
+  const f = Object.assign({ kind: 'forklift', S, pause: 0, carrying: true, fp: [3.6, 2.1], tagY: 3.1 }, o);
+  f.obj = makeForklift(); S.g.add(f.obj); reg(f, f.obj);
+  if (f.mode === 'shuttle') { f.A = V(...o.a); f.B = V(...o.b); f.obj.position.copy(f.A); f.to = f.B; f.h = Math.atan2(-(f.B.z - f.A.z), f.B.x - f.A.x); }
+  else { f.obj.position.set(o.at[0], 0, o.at[1]); f.h = o.h || 0; f.carrying = false; }
+  f.obj.rotation.y = f.h; f.obj.userData.load.visible = f.carrying;
+  S.forklifts.push(f); ALL.push(f); return f;
+}
+const pins = [];
+function addPin(S, x, y, z) {
+  const g = new THREE.Group(), m = M(ACC, { roughness: .35, emissive: '#0b2a8a', emissiveIntensity: .25 });
+  const s = new THREE.Mesh(new THREE.SphereGeometry(.6, 24, 16), m); s.castShadow = true; g.add(s);
+  const c = new THREE.Mesh(new THREE.ConeGeometry(.42, 1.1, 24), m); c.rotation.x = Math.PI; c.position.y = -.75; c.castShadow = true; g.add(c);
+  const d = new THREE.Mesh(new THREE.SphereGeometry(.24, 16, 12), M('#ffffff')); d.position.set(0, .05, .48); g.add(d);
+  g.position.set(x, y, z); S.g.add(g); pins.push({ g, y }); return g;
+}
+function addItem(S, o) {
+  const e = Object.assign({ kind: 'item', S }, o), [x, z, cols, rows, layers, k] = o.at;
+  const g = new THREE.Group(); g.position.set(x, 0, z); S.g.add(g); stackInto(g, cols, rows, layers, k);
+  e.obj = g; reg(e, g); e.fp = [cols * 1.38 + .5, rows * 1.38 + .5]; e.tagY = layers * .64 + .9;
+  if (o.pin) { const p = addPin(S, x, layers * .64 + 2.6, z); reg(e, p); e.tagY = layers * .64 + 3.8; }
+  S.items.push(e); ALL.push(e); return e;
+}
+function addCharger(S, id, x, z) {
+  const e = { kind: 'charger', S, id, fp: [2.4, 3.2], tagY: 2.1, kwh: (20 + rnd() * 30).toFixed(1) };
+  const g = new THREE.Group(); g.position.set(x, 0, z); S.g.add(g);
+  box(g, .6, 1.5, .55, '#ffffff', 0, .75, 0);
+  box(g, .04, .4, .32, M('#2bd17e', { emissive: '#1a9c5a', emissiveIntensity: .6 }), .31, 1.1, 0, false);
+  const pad = plane(g, 2.6, 2.2, new THREE.MeshStandardMaterial({ color: '#2bd17e', transparent: true, opacity: .45 }), 1.5, 0, .025);
+  e.obj = g; reg(e, g); S.chargers.push(e); ALL.push(e); return e;
+}
+function addAmrs(S, pts, n) {
+  for (let i = 0; i < n; i++) {
+    const g = new THREE.Group();
+    box(g, .9, .35, .7, '#ff7a1a', 0, .25, 0); box(g, .55, .14, .45, '#ffffff', 0, .5, 0);
+    box(g, .12, .08, .12, M('#3cf0ff', { emissive: '#3cf0ff', emissiveIntensity: .8 }), .3, .6, 0, false);
+    S.g.add(g); S.amrs.push({ g, pts, seg: (i * 4 / n) % 4 | 0, u: (i * 4 / n) % 1, h: 0 });
+  }
+}
+
+/* ================= site scaffold ================= */
+function scaffold(S, i) {
+  const g = S.g;
+  plane(g, 100, 6.6, '#4a5573', 0, 16, .012);
+  plane(g, 100, .2, '#ffffff', 0, 12.8, .02); plane(g, 100, .2, '#ffffff', 0, 19.2, .02);
+  for (let x = -48; x < 50; x += 5) plane(g, 2.2, .16, '#ffffff', x, 16, .02);
+  plane(g, 100, 2.4, '#d7dfee', 0, 21.4, .014);
+  plane(g, 62, 38, '#eef2fb', 0, -7.3, .01);
+  plane(g, 12, 1.4, '#5a6582', 20, 12.2, .013);
+  plane(g, 62, .1, '#ffffff', 0, 11.6, .02);
+  fence(g, -31, 11.6, 14, 11.6); fence(g, 26, 11.6, 31, 11.6);
+  fence(g, -31, -26.3, -31, 11.6); fence(g, 31, -26.3, 31, 11.6); fence(g, -31, -26.3, 31, -26.3);
+  sign(g, `${S.code} ${S.name}`, 7, .9, { font: '700 52px "Noto Sans TC",sans-serif', px: 768 }, 28.6, 1.9, 12.2, 0);
+  box(g, .14, 1.5, .14, '#232a3b', 25.6, .75, 12.2); box(g, .14, 1.5, .14, '#232a3b', 31.6, .75, 12.2);
+  for (let k = 0; k < 7; k++) tree(g, -40 + rnd() * 6, -26 + k * 6 + rnd() * 2, .9 + rnd() * .3);
+  for (let k = 0; k < 6; k++) tree(g, -25 + k * 9 + rnd() * 3, 24 + rnd() * 2, .9 + rnd() * .3);
+  for (let k = 0; k < 8; k++) bush(g, -28 + k * 7 + rnd() * 2, 11);
+  office(g, -42, -12, 6, 8, 7 + rnd() * 5); office(g, 42, 28, 8, 6, 5 + rnd() * 4);
+}
+
+/* ================= sites ================= */
+const SITES = [
+ { code: 'WH-01', type: '倉庫', name: '林口物流園區', addr: '新北市林口區工八路 12 號', cap: 1800, stock: 1412, dStock: 15, on: 96.6, dOn: .4, outbound: 23, putaway: 15, staged: 3, cx: 0, cz: -2,
+   inv: [['紙箱（中）', '1,906', '#e3a14f', 1], ['塑膠物流箱', '297', '#2f63ff', 1], ['安全帽', '212', '#ffc21a', 0], ['封箱膠帶', '4,448', '#d48d3c', 1]],
+   build(S) {
+     building(S, { x: 4, w: 16, d: 12, h: 5, wall: '#2457f0', roof: '#3a6dff', trim: '#1238b8', type: 'gable' });
+     building(S, { x: -10, w: 10, d: 9, h: 4.2, wall: '#2457f0', roof: '#3a6dff', trim: '#1238b8', type: 'gable' });
+     sign(S.g, 'DockSight', 4.2, 1, { font: '700 64px "JetBrains Mono",monospace' }, 4, 4.5, -1.9);
+     dock(S, 0, '碼頭 1'); dock(S, 7, '碼頭 2'); openDoor(S, -10, -2);
+     rack(S, 22, -18, 8, 3); rack(S, 22, -12, 8, 3);
+     container(S, -24, -16, Math.PI / 2, '#12a6a0', '海揚海運');
+     decoStack(S, -19, -6, 3, 2, 2); decoStack(S, -22, 2, 3, 2, 2); decoStack(S, 22, -4, 2, 2, 2, 'wrap'); decoStack(S, 15, 4.5, 2, 1, 2);
+     addItem(S, { id: '安全帽', name: '安全帽', sku: 'PPE-HLM-W', qty: '82 頂', weight: '36 kg', loc: 'WH-01 · 暫存區 S01', lot: 'L2601-870', recv: '10/09 08:20', status: '待上架', sc: 'warn', at: [12, 3.5, 1, 1, 2, 'card'], pin: true });
+     addItem(S, { id: '塑膠物流箱', name: '塑膠物流箱', sku: 'BOX-PP-60', qty: '120 個', weight: '310 kg', loc: 'WH-01 · 暫存區 S03', lot: 'L2601-822', recv: '10/09 07:55', status: '待上架', sc: 'warn', at: [-15, 3, 2, 1, 2, 'wrap'], pin: true });
+     addItem(S, { id: '紙箱（中）', name: '紙箱（中）', sku: 'CTN-M-40', qty: '600 只', weight: '142 kg', loc: 'WH-01 · 料架 R1-02', lot: 'L2601-801', recv: '10/08 16:10', status: '在庫', sc: 'good', at: [-24, -8, 2, 2, 3, 'card'] });
+     addForklift(S, { id: 'FL-01', driver: '吳政達', model: '豐田 8FBE18', mode: 'shuttle', a: [-20, 7], b: [-3.2, 1.6], op: '裝貨中', task: '為 TRK-2051 裝貨（碼頭 1）', battery: 75, moves: 18 });
+     addForklift(S, { id: 'FL-02', driver: '許俊宏', model: '豐田 8FBE18', mode: 'idle', at: [-17, -12], h: Math.PI / 2, task: '待命於西側料區', battery: 64, moves: 9 });
+     addTruck(S, { id: 'TRK-2051', c: 'ds', driver: '黃冠霖', plate: 'KCW-1106', shipment: '#SHP-78442', customer: '和光零售', to: '台北市內湖區', dock: 1, dir: 'out', state: 'loading', pal: [2, 6], times: ['06:49', '08:20', '09:53'] });
+     addTruck(S, { id: 'TRK-2287', c: 'lf', driver: '張家豪', plate: 'KFA-2287', shipment: '#SHP-78439', customer: '北辰電材', dock: 2, dir: 'in', state: 'enroute', pal: [0, 6], times: ['06:12', '07:30', '08:18', '08:41'] });
+   } },
+ { code: 'WH-02', type: '配送中心', name: '台中港配送中心', addr: '台中市梧棲區臨港路四段 88 號', cap: 4200, stock: 3310, dStock: 28, on: 98.2, dOn: .3, outbound: 21, putaway: 35, staged: 4, cx: 0, cz: -3,
+   inv: [['LED 面板 60×60', '1,787', '#7fb2ff', 1], ['辦公椅', '174', '#3b4664', 1], ['紙箱（大）', '993', '#e3a14f', 0], ['丁腈手套', '5,793', '#2f63ff', 1]],
+   build(S) {
+     building(S, { x: 0, w: 36, d: 16, h: 6, wall: '#f4f6fb', roof: '#dfe5f1', trim: ACC, type: 'flat', roofSign: 'WH-02 台中港配送中心', roofFg: ACC });
+     box(S.g, 36, .5, .06, ACC, 0, 5.2, -1.95, false);
+     [-12, -4, 4, 12].forEach((x, i) => dock(S, x, '碼頭 ' + (i + 1)));
+     sign(S.g, 'DockSight', 4.2, 1, { font: '700 64px "JetBrains Mono",monospace' }, 14, 5.2, -1.92);
+     rack(S, 24.5, -20, 8, 4); rack(S, 24.5, -14, 8, 4); rack(S, -24.5, -20, 8, 3);
+     decoStack(S, -24, -10, 3, 3, 3); decoStack(S, 24, -6, 3, 2, 2, 'wrap'); decoStack(S, -26, 6, 2, 2, 2);
+     addItem(S, { id: 'LED 面板 60×60', name: 'LED 面板 60×60', sku: 'LED-PNL-60', qty: '240 片', weight: '480 kg', loc: 'WH-02 · 暫存區 S02', lot: 'L2601-911', recv: '10/09 07:40', status: '待上架', sc: 'warn', at: [-22, 3, 2, 2, 2, 'white'], pin: true });
+     addItem(S, { id: '紙箱（大）', name: '紙箱（大）', sku: 'CTN-L-60', qty: '400 只', weight: '210 kg', loc: 'WH-02 · 暫存區 S05', lot: 'L2601-905', recv: '10/09 06:58', status: '低於安全庫存', sc: 'warn', at: [24, 3, 2, 2, 3, 'card'], pin: true });
+     addForklift(S, { id: 'FL-03', driver: '林佳慧', model: '永恒力 EFG 216', mode: 'shuttle', a: [-24, 8.5], b: [-8, 1.6], op: '裝貨中', task: '為 TRK-2127 裝貨（碼頭 1）', battery: 81, moves: 27 });
+     addForklift(S, { id: 'FL-04', driver: '蔡明哲', model: '永恒力 EFG 216', mode: 'shuttle', a: [24, 8.5], b: [8, 1.6], op: '卸貨中', task: '卸下 TRK-2704 貨物（碼頭 2）', battery: 58, moves: 22 });
+     addForklift(S, { id: 'FL-05', driver: '鄭雅文', model: '豐田 8FBE18', mode: 'idle', at: [-18, -17], h: 0, task: '待命於北側料架', battery: 92, moves: 4 });
+     addTruck(S, { id: 'TRK-2127', c: 'jy', driver: '劉建志', plate: 'KAB-2127', shipment: '#SHP-78444', customer: '鼎峰機械', to: '台中市西屯區', dock: 1, dir: 'out', state: 'loading', pal: [3, 6], times: ['07:02', '08:15', '09:20'] });
+     addTruck(S, { id: 'TRK-2704', c: 'bc', driver: '王志明', plate: 'KDE-2704', shipment: '#SHP-78433', customer: '澄海食品', dock: 2, dir: 'in', state: 'unloading', pal: [1, 4], times: ['05:40', '06:52', '07:30', '08:47'] });
+     addTruck(S, { id: 'TRK-2658', c: 'lf', driver: '陳冠宇', plate: 'KFB-2658', shipment: '#SHP-78447', customer: '台光精密', dock: 3, dir: 'in', state: 'docking', pal: [0, 5], times: ['06:30', '07:44', '08:20', '09:01'] });
+     addTruck(S, { id: 'TRK-2526', c: 'ds', driver: '楊子賢', plate: 'KCW-2526', shipment: '#SHP-78451', customer: '和光零售', dock: 4, dir: 'in', state: 'enroute', pal: [0, 6], times: ['06:41', '07:58', '08:36', '09:05'] });
+   } },
+ { code: 'WH-03', type: '冷鏈中心', name: '高雄冷鏈中心', addr: '高雄市前鎮區新生路 248 號', cap: 1400, stock: 990, dStock: 20, on: 96.0, dOn: .4, outbound: 31, putaway: 20, staged: 2, cx: -2, cz: -3,
+   inv: [['冷凍白蝦 10kg', '334', '#ff9aa5', 1], ['鮮乳 24 入', '364', '#f2f6ff', 1], ['丁腈手套', '495', '#2f63ff', 0], ['保冷箱', '208', '#14b8a6', 1]],
+   build(S) {
+     building(S, { x: -2, w: 30, d: 14, h: 6, wall: '#ffffff', roof: '#d7dde8', trim: ACC, type: 'flat' });
+     for (let i = 0; i < 6; i++) chiller(S, -13 + i * 4.4, 6.45, -10);
+     [-10, -2, 6].forEach((x, i) => dock(S, x, '碼頭 ' + (i + 1)));
+     sign(S.g, '冷鏈 −18°C', 4.6, 1, { font: '700 60px "Noto Sans TC",sans-serif' }, 10.5, 5.1, -1.92);
+     container(S, -24, -21, 0, '#1f8fe0', '藍峰冷鏈'); container(S, -24, -17.6, 0, '#12a6a0', '海揚海運'); container(S, -24, -21, 0, '#f2f4f8', 'REEFER', 2.62);
+     container(S, 23, -21, 0, '#ff6f00', '嘉運通');
+     decoStack(S, 22, -12, 2, 3, 2, 'white'); decoStack(S, -24, -8, 2, 2, 2, 'teal');
+     addItem(S, { id: '冷凍白蝦 10kg', name: '冷凍白蝦 10kg', sku: 'FRZ-SHR-10', qty: '120 箱', weight: '1,260 kg', loc: 'WH-03 · 冷凍暫存 F01', lot: 'L2601-930', recv: '10/09 06:20', status: '待入庫', sc: 'warn', at: [22, 3, 2, 1, 2, 'white'], pin: true });
+     addItem(S, { id: '保冷箱', name: '保冷箱', sku: 'BOX-ICE-45', qty: '208 個', weight: '190 kg', loc: 'WH-03 · 暫存區 S01', lot: 'L2601-902', recv: '10/08 15:40', status: '在庫', sc: 'good', at: [-22, 3, 2, 1, 2, 'teal'], pin: true });
+     addForklift(S, { id: 'FL-07', driver: '黃怡婷', model: '豐田 8FBE15', mode: 'shuttle', a: [22, 8.5], b: [9.6, 1.6], op: '卸貨中', task: '卸下 TRK-2148 貨物（碼頭 1）', battery: 69, moves: 31 });
+     addForklift(S, { id: 'FL-08', driver: '李承翰', model: '豐田 8FBE15', mode: 'idle', at: [-20, -2], h: 0, task: '待命於冷凍暫存區', battery: 88, moves: 12 });
+     addTruck(S, { id: 'TRK-2148', c: 'lf', driver: '周家銘', plate: 'KFC-2148', shipment: '#SHP-78448', customer: '海港水產', dock: 1, dir: 'in', state: 'unloading', pal: [2, 4], times: ['05:10', '06:21', '07:02', '08:50'] });
+     addTruck(S, { id: 'TRK-2471', c: 'bc', driver: '謝宗翰', plate: 'KDE-2471', shipment: '#SHP-78449', customer: '瑞穗乳品', dock: 2, dir: 'in', state: 'docking', pal: [0, 4], times: ['05:52', '06:58', '07:46', '08:59'] });
+     addTruck(S, { id: 'TRK-2603', c: 'jy', driver: '曾柏翰', plate: 'KAB-2603', shipment: '#SHP-78472', customer: '港都超市', dock: 3, dir: 'in', state: 'enroute', pal: [0, 6], times: ['06:04', '07:24', '08:14', '08:52'] });
+   } },
+ { code: 'WH-04', type: '轉運站', name: '桃園轉運中心', addr: '桃園市大園區航勤北路 6 號', cap: 1600, stock: 610, dStock: 20, on: 96.2, dOn: .4, outbound: 29, putaway: 20, staged: 4, cx: 0, cz: -3,
+   inv: [['礦泉水 24 入', '298', '#7fd3ff', 1], ['封箱膠帶', '1,923', '#d48d3c', 1], ['LED 面板 60×60', '73', '#7fb2ff', 0], ['安全帽', '320', '#ffc21a', 1]],
+   build(S) {
+     building(S, { x: 2, w: 40, d: 14, h: 5.5, wall: '#eef1f7', roof: '#2f66ff', trim: ACC, type: 'gable', mods: 6 });
+     const xs = [0, 1, 2, 3, 4, 5].map(i => -18 + 40 / 6 * (i + .5));
+     ['入 1', '入 2', '入 3', '出 1', '出 2', '出 3'].forEach((l, i) => dock(S, +xs[i].toFixed(2), l));
+     sign(S.g, 'DockSight', 3.6, .9, { font: '700 64px "JetBrains Mono",monospace' }, 19, 5, -1.92);
+     const ch = [-20, -16, -12, -8].map((z, i) => addCharger(S, 'C' + (i + 1), -28.5, z));
+     decoStack(S, 26, -20, 2, 3, 2); decoStack(S, 26, -11, 2, 2, 3, 'wrap');
+     addItem(S, { id: '礦泉水 24 入', name: '礦泉水 24 入', sku: 'BEV-WTR-24', qty: '96 箱', weight: '860 kg', loc: 'WH-04 · 越庫區 X02', lot: 'L2601-944', recv: '10/09 08:05', status: '越庫待出', sc: 'acc', at: [25, 3, 2, 1, 2, 'white'], pin: true });
+     addItem(S, { id: '封箱膠帶', name: '封箱膠帶', sku: 'TAPE-48', qty: '320 捲', weight: '118 kg', loc: 'WH-04 · 越庫區 X05', lot: 'L2601-921', recv: '10/09 07:12', status: '越庫待出', sc: 'acc', at: [-23, 3.5, 2, 1, 2, 'wrap'], pin: true });
+     addForklift(S, { id: 'FL-10', driver: '簡志豪', model: '豐田 8FBE18', mode: 'shuttle', a: [-24, -1], b: [-18.6, 1.6], op: '卸貨中', task: '卸下 TRK-2205 貨物（入 1）', battery: 84, moves: 29 });
+     addForklift(S, { id: 'FL-11', driver: '游雅婷', model: '豐田 8FBE18', mode: 'shuttle', a: [27, 6], b: [15.4, 1.6], op: '裝貨中', task: '為 TRK-2229 裝貨（出 2）', battery: 82, moves: 32 });
+     addForklift(S, { id: 'FL-12', driver: '羅建宏', model: '豐田 8FBE18', mode: 'charge', at: [-26, -16], h: Math.PI, charger: ch[1], task: '於 C2 充電', battery: 86, moves: 14 });
+     addForklift(S, { id: 'FL-13', driver: '馮怡君', model: '豐田 8FBE18', mode: 'charge', at: [-26, -12], h: Math.PI, charger: ch[2], task: '於 C3 充電', battery: 93, moves: 11 });
+     ch[1].fl = S.forklifts[2]; ch[2].fl = S.forklifts[3];
+     addTruck(S, { id: 'TRK-2205', c: 'ds', driver: '黃冠霖', plate: 'KCW-3157', shipment: '#SHP-78450', customer: '鼎峰機械', dock: 1, dir: 'in', state: 'unloading', pal: [2, 6], times: ['06:58', '08:26', '09:11', '09:37'] });
+     addTruck(S, { id: 'TRK-2229', c: 'bc', driver: '陳威廷', plate: 'KDF-5520', shipment: '#SHP-78402', customer: '澄海食品', to: '新竹市東區', dock: 5, dir: 'out', state: 'loading', pal: [3, 6], times: ['08:10', '08:52', '09:31'] });
+     addTruck(S, { id: 'TRK-2307', c: 'bc', driver: '林承佑', plate: 'KAA-8821', shipment: '#SHP-78431', customer: '北辰電材', dock: 3, dir: 'in', state: 'docking', pal: [0, 8], times: ['06:40', '07:55', '08:41', '08:58'] });
+     addTruck(S, { id: 'TRK-2481', c: 'jy', driver: '柯以恆', plate: 'KEB-3157', shipment: '#SHP-78466', customer: '和光零售', dock: 2, dir: 'in', state: 'enroute', pal: [0, 10], times: ['07:03', '08:23', '09:12', '09:20'] });
+   } },
+ { code: 'WH-05', type: '自動化中心', name: '台南智慧物流中心', addr: '台南市安南區科技一路 21 號', cap: 2400, stock: 1730, dStock: 25, on: 95.9, dOn: .4, outbound: 33, putaway: 25, staged: 3, cx: 0, cz: -4,
+   inv: [['LED 面板 60×60', '1,767', '#7fb2ff', 1], ['紙箱（中）', '1,917', '#e3a14f', 1], ['丁腈手套', '965', '#2f63ff', 0], ['安全帽', '908', '#ffc21a', 1]],
+   build(S) {
+     building(S, { x: 2, w: 32, d: 18, h: 6.5, wall: '#f4f6fb', roof: '#2f66ff', trim: '#1238b8', type: 'flat', roofSign: 'WH-05 台南智慧物流中心' });
+     for (let i = 0; i < 3; i++) box(S.g, 6, .2, 2.2, '#9fc0ff', -8 + i * 10, 6.95, -16);
+     [-9, -1, 7, 15].forEach((x, i) => dock(S, x, '碼頭 ' + (i + 1)));
+     plane(S.g, 9, 18, '#ffe2bd', -24.5, -14, .015);
+     addAmrs(S, [V(-27.5, -22), V(-21.5, -22), V(-21.5, -6), V(-27.5, -6)], 5);
+     rack(S, 25, -20, 8, 4); rack(S, 25, -13, 8, 4);
+     decoStack(S, 25, -5, 2, 2, 2, 'wrap');
+     addItem(S, { id: 'LED 面板（台南）', name: 'LED 面板 60×60', sku: 'LED-PNL-60', qty: '180 片', weight: '360 kg', loc: 'WH-05 · 暫存區 S01', lot: 'L2601-951', recv: '10/09 08:32', status: '待上架', sc: 'warn', at: [24, 3.5, 2, 1, 2, 'white'], pin: true });
+     addItem(S, { id: '安全帽（台南）', name: '安全帽', sku: 'PPE-HLM-W', qty: '150 頂', weight: '66 kg', loc: 'WH-05 · 暫存區 S04', lot: 'L2601-948', recv: '10/09 08:02', status: '待上架', sc: 'warn', at: [-17, 4, 1, 1, 2, 'yellow'], pin: true });
+     addForklift(S, { id: 'FL-15', driver: '蘇冠廷', model: '永恒力 EFG 216', mode: 'shuttle', a: [24, 8.5], b: [3, 1.6], op: '裝貨中', task: '為 TRK-2574 裝貨（碼頭 2）', battery: 77, moves: 24 });
+     addForklift(S, { id: 'FL-16', driver: '何佩珊', model: '永恒力 EFG 216', mode: 'idle', at: [22, -7], h: Math.PI / 2, task: '待命於料架區', battery: 95, moves: 6 });
+     addTruck(S, { id: 'TRK-2339', c: 'jy', driver: '洪志遠', plate: 'KAB-2339', shipment: '#SHP-78458', customer: '台光精密', to: '台南市永康區', dock: 1, dir: 'out', state: 'loading', pal: [1, 5], times: ['07:20', '08:44', '09:41'] });
+     addTruck(S, { id: 'TRK-2574', c: 'bc', driver: '江柏宇', plate: 'KDE-2574', shipment: '#SHP-78459', customer: '南科電子', to: '高雄市楠梓區', dock: 2, dir: 'out', state: 'loading', pal: [3, 6], times: ['07:05', '08:30', '09:28'] });
+     addTruck(S, { id: 'TRK-2372', c: 'ds', driver: '賴俊傑', plate: 'KCW-2870', shipment: '#SHP-78460', customer: '日麗超市', dock: 3, dir: 'in', state: 'docking', pal: [0, 6], times: ['07:01', '08:32', '09:21', '09:35'] });
+     addTruck(S, { id: 'TRK-2412', c: 'bc', driver: '施宏明', plate: 'KDE-2412', shipment: '#SHP-78463', customer: '南科電子', dock: 4, dir: 'in', state: 'enroute', pal: [0, 5], times: ['06:35', '07:50', '08:40', '09:12'] });
+   } },
+];
+SITES.forEach((S, i) => {
+  Object.assign(S, { kind: 'site', g: new THREE.Group(), docks: [], trucks: [], forklifts: [], items: [], chargers: [], amrs: [], ribbon: null });
+  S.g.position.x = i * 100; scene.add(S.g);
+  scaffold(S, i); S.build(S); ALL.push(S);
+  const rb = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: ACC, transparent: true, opacity: .8, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+  rb.visible = false; S.g.add(rb); S.ribbon = rb;
+});
+for (let i = -1; i <= SITES.length; i++) { const x = i * 100 + 50; tree(scene, x - 4, -4); tree(scene, x + 3, -16); tree(scene, x, 6); office(scene, x, -32, 10, 7, 9); }
+
+/* selection brackets */
+const bracketTex = tex('bracket', 256, 256, (g, W, H) => {
+  g.fillStyle = 'rgba(29,84,255,.16)'; g.fillRect(8, 8, W - 16, H - 16);
+  g.strokeStyle = '#1d54ff'; g.lineWidth = 12; g.lineCap = 'round'; const L = 60, m = 10;
+  [[m, m, 1, 1], [W - m, m, -1, 1], [m, H - m, 1, -1], [W - m, H - m, -1, -1]].forEach(([x, y, sx, sy]) => { g.beginPath(); g.moveTo(x + sx * L, y); g.lineTo(x, y); g.lineTo(x, y + sy * L); g.stroke(); });
+});
+const bracket = new THREE.Group();
+const bracketPlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: bracketTex, transparent: true, depthWrite: false, toneMapped: false }));
+bracketPlane.rotation.x = -Math.PI / 2; bracket.add(bracketPlane); bracket.visible = false; scene.add(bracket);
+
+/* ================= camera ================= */
+const view = { target: new THREE.Vector3(0, 0, -2), goal: null, az: -0.6, azTo: -0.6, el: 0.6, zoom: 1, zoomTo: 1, base: 54, follow: null };
+const frustumH = () => view.base / view.zoom * Math.max(1, 1.25 / (app.clientWidth / Math.max(1, app.clientHeight)));
+function updateCamera() {
+  const a = app.clientWidth / Math.max(1, app.clientHeight), fh = frustumH();
+  camera.left = -fh * a / 2; camera.right = fh * a / 2; camera.top = fh / 2; camera.bottom = -fh / 2; camera.updateProjectionMatrix();
+  const d = 120, t = view.target;
+  camera.position.set(t.x + Math.sin(view.az) * Math.cos(view.el) * d, t.y + Math.sin(view.el) * d, t.z + Math.cos(view.az) * Math.cos(view.el) * d);
+  camera.lookAt(t); camera.updateMatrixWorld();
+  sun.position.copy(t).add(SUN_OFF); sun.target.position.copy(t); sun.target.updateMatrixWorld();
+}
+function resize() { renderer.setSize(app.clientWidth, app.clientHeight, false); updateCamera(); }
+new ResizeObserver(resize).observe(app);
+
+/* ================= state ================= */
+let cur = SITES[0], sel = null, tab = 'trucks', tracking = true;
+const tmp = new THREE.Vector3();
+const wpos = e => e.obj.getWorldPosition(tmp.clone ? new THREE.Vector3() : tmp);
+function siteCenter(S) { return new THREE.Vector3(S.g.position.x + S.cx, 0, S.cz); }
+function setSite(S, center = true) {
+  cur = S; if (center) { view.follow = null; view.goal = siteCenter(S); view.zoomTo = 1; }
+  if (sel && sel.S !== S) sel = null;
+  renderUI();
+}
+function select(e) {
+  if (e && e.kind === 'site') { sel = null; setSite(e); return; }
+  sel = e;
+  if (e) {
+    if (e.S !== cur) cur = e.S;
+    tracking = true;
+    if (e.kind === 'truck' || e.kind === 'forklift') { view.follow = e; view.goal = null; }
+    else { view.follow = null; view.goal = wpos(e); }
+    if (view.zoomTo < 1.3) view.zoomTo = 1.45;
+  }
+  renderUI();
+}
+
+/* ================= input ================= */
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function pick(cx, cy) {
+  const r = canvas.getBoundingClientRect();
+  ndc.set((cx - r.left) / r.width * 2 - 1, -(cy - r.top) / r.height * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const vis = pickables.filter(m => m.userData.ent.S ? m.userData.ent.S.g.visible : m.userData.ent.g.visible);
+  const hit = ray.intersectObjects(vis, false)[0];
+  return hit ? hit.object.userData.ent : null;
+}
+const ptrs = new Map(); let down = null, pinch = null;
+const clampZ = z => Math.min(3.2, Math.max(.4, z));
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (ptrs.size === 1) down = { moved: 0 };
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: view.zoomTo }; }
+  closePops();
+});
+canvas.addEventListener('pointermove', e => {
+  const prev = ptrs.get(e.pointerId);
+  if (!prev) { const h = pick(e.clientX, e.clientY); canvas.classList.toggle('hot', !!h && h.kind !== 'site'); return; }
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (ptrs.size === 2 && pinch) { const [a, b] = [...ptrs.values()]; view.zoomTo = view.zoom = clampZ(pinch.z * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d); return; }
+  const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+  if (down) down.moved += Math.abs(dx) + Math.abs(dy);
+  if (down && down.moved > 4) {
+    canvas.classList.add('drag'); view.follow = null; view.goal = null; tracking = false;
+    const upp = frustumH() / app.clientHeight;
+    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0); right.y = 0; right.normalize();
+    const fwd = new THREE.Vector3(-Math.sin(view.az), 0, -Math.cos(view.az));
+    view.target.addScaledVector(right, -dx * upp).addScaledVector(fwd, dy * upp / Math.sin(view.el));
+    const near = SITES.reduce((b, S) => Math.abs(S.g.position.x - view.target.x) < Math.abs(b.g.position.x - view.target.x) ? S : b, cur);
+    if (near !== cur && Math.abs(near.g.position.x - view.target.x) < 30) { cur = near; if (sel && sel.S !== cur) sel = null; }
+  }
+});
+function endPtr(e) {
+  if (!ptrs.has(e.pointerId)) return;
+  ptrs.delete(e.pointerId); if (ptrs.size < 2) pinch = null;
+  if (ptrs.size === 0) {
+    canvas.classList.remove('drag');
+    if (down && down.moved <= 4 && e.type === 'pointerup') { const h = pick(e.clientX, e.clientY); if (h) select(h); }
+    down = null;
+  }
+}
+canvas.addEventListener('pointerup', endPtr); canvas.addEventListener('pointercancel', endPtr);
+canvas.addEventListener('wheel', e => { e.preventDefault(); view.zoomTo = clampZ(view.zoomTo * Math.exp(-e.deltaY * .0012)); }, { passive: false });
+$('zin').onclick = () => view.zoomTo = clampZ(view.zoomTo * 1.3);
+$('zout').onclick = () => view.zoomTo = clampZ(view.zoomTo / 1.3);
+$('rl').onclick = () => view.azTo -= Math.PI / 4;
+$('rr').onclick = () => view.azTo += Math.PI / 4;
+$('home').onclick = () => { sel = null; view.azTo = -0.6 + Math.round((view.azTo + .6) / (Math.PI * 2)) * Math.PI * 2; setSite(cur); };
+
+/* ================= derived data ================= */
+const ST = { enroute: ['行駛中', 'acc'], gate: ['抵達閘門', 'warn'], docking: ['靠站中', 'acc'], unloading: ['卸貨中', 'good'], loading: ['裝貨中', 'good'] };
+const fmt = d => d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
+const TIME_SCALE = 14;
+const moving = tr => tr.state === 'enroute' || tr.state === 'gate' || tr.state === 'docking';
+function eta(tr) {
+  if (!moving(tr)) return null;
+  const rem = Math.max(0, tr.path.len - tr.t), sec = rem / 4 * TIME_SCALE;
+  return { m: Math.round(rem * 4), min: Math.max(1, Math.ceil(sec / 60)), at: new Date(Date.now() + sec * 1000) };
+}
+function truckWhere(tr) {
+  if (tr.state === 'enroute') return `前往 ${tr.S.code}`;
+  if (tr.state === 'gate') return `${tr.S.code} 閘門`;
+  if (tr.state === 'docking') return `倒車進 ${tr.dk.label}`;
+  return `${tr.S.code} · ${tr.dk.label}`;
+}
+function truckProg(tr) {
+  const e = eta(tr);
+  if (e) return { pct: 100 * tr.t / tr.path.len, label: tr.state === 'docking' ? '靠站' : `${e.min} 分`, cls: '' };
+  return { pct: 100 * tr.pal[0] / tr.pal[1], label: `${tr.pal[0]}/${tr.pal[1]}`, cls: 'good' };
+}
+function flState(f) {
+  if (f.mode === 'charge') return ['充電中', 'warn'];
+  if (f.mode === 'idle') return ['待命', 'mute'];
+  return [f.op, 'good'];
+}
+function dockStates(S) {
+  return S.docks.map(d => {
+    const tr = S.trucks.find(t => t.dk === d);
+    if (!tr) return { d, s: 'free' };
+    if (tr.state === 'loading' || tr.state === 'unloading') return { d, s: 'busy', tr };
+    if (tr.state === 'docking') return { d, s: 'arriving', tr };
+    return { d, s: 'reserved', tr };
+  });
+}
+const busyDocks = S => dockStates(S).filter(x => x.s === 'busy').length;
+const onSite = S => S.trucks.filter(t => t.state !== 'enroute').length;
+const fmtN = n => n.toLocaleString('en-US');
+
+/* ================= UI ================= */
+const truckIco = c => `<svg viewBox="0 0 40 40"><path d="M3 12h22v14H3z" fill="#fff" stroke="#c9d2e3"/><path d="M5 21h18" stroke="${c}" stroke-width="3"/><path d="M25 16h7l5 6v4H25z" fill="${c}"/><path d="M30 18h3l2.5 3H30z" fill="#26314d"/><circle cx="9" cy="28" r="3" fill="#262c3a"/><circle cx="31" cy="28" r="3" fill="#262c3a"/></svg>`;
+const flIco = `<svg viewBox="0 0 40 40"><path d="M8 18h14v10H8z" fill="#ffb000"/><path d="M10 10h8v8h-8z" fill="none" stroke="#232a3b" stroke-width="2"/><path d="M24 8v22h10" stroke="#232a3b" stroke-width="2.4" fill="none"/><circle cx="12" cy="30" r="3" fill="#232a3b"/><circle cx="20" cy="30" r="3" fill="#232a3b"/></svg>`;
+const palIco = `<svg viewBox="0 0 40 40"><path d="M7 29h26v3H7z" fill="#b5763a"/><path d="M9 17h11v12H9zM20 17h11v12H20z" fill="#e3a14f" stroke="#c4843a"/><path d="M14 6h12v11H14z" fill="#efb266" stroke="#c4843a"/></svg>`;
+const chIco = `<svg viewBox="0 0 40 40"><rect x="12" y="6" width="16" height="28" rx="3" fill="#fff" stroke="#c9d2e3"/><path d="M21 11l-5 9h5l-2 8 6-10h-5z" fill="#00965a"/></svg>`;
+const siteIco = `<svg viewBox="0 0 40 40"><path d="M5 17 20 8l15 9v15H5z" fill="#1d54ff"/><path d="M11 22h8v10h-8zM22 22h7v6h-7z" fill="#dbe5ff"/></svg>`;
+const xBtn = '<button id="close" aria-label="關閉"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>';
+const trackBtn = () => `<button id="follow" aria-pressed="${tracking}" title="鏡頭跟隨" aria-label="鏡頭跟隨"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></button>`;
+
+function panelSite(S) {
+  const ds = dockStates(S), busy = ds.filter(x => x.s === 'busy').length, arriving = S.trucks.filter(moving).length;
+  const working = S.forklifts.filter(f => f.mode === 'shuttle');
+  const fl = working[0] || S.forklifts[0];
+  return `<div class="dh"><span class="ico">${siteIco}</span><div><div class="eyebrow">${S.type} · ${S.code}</div><h2>${S.name}</h2><p>${S.addr}</p></div></div>
+    <div class="dstate"><span class="pill good">營運中</span><span>${busy} 作業中 · ${arriving} 進場 · ${S.staged} 待上架</span></div>
+    <div class="tiles">
+      <div class="tile"><small>在庫棧板</small><b>${fmtN(S.stock)}</b><span>/ ${fmtN(S.cap)}</span><span class="bar"><i style="width:${(100 * S.stock / S.cap).toFixed(0)}%"></i></span></div>
+      <div class="tile"><small>碼頭</small><b>${busy}</b><span>/ ${S.docks.length} 作業中</span><span class="bar good"><i style="width:${(100 * busy / S.docks.length).toFixed(0)}%"></i></span></div>
+      <div class="tile"><small>今日出車</small><b>${S.outbound}</b><span>車次</span></div>
+      <div class="tile"><small>今日上架</small><b>${S.putaway}</b><span>棧板</span></div>
+    </div>
+    <div class="sec">庫存<small>數量</small></div>
+    <ul class="inv">${S.inv.map(([n, q, c, ok]) => `<li><i class="sw" style="--c:${c}"></i><span>${n}</span><b>${q}</b><span class="pill ${ok ? 'good' : 'warn'}">${ok ? '充足' : '偏低'}</span></li>`).join('')}</ul>
+    <div class="sec">堆高機<small>${working.length}/${S.forklifts.length} 作業中</small></div>
+    <div class="flrow"><b>${fl.id}</b><span>${fl.task}</span><span class="bar good"><i style="width:${fl.battery.toFixed(0)}%"></i></span><small class="mono">${fl.battery.toFixed(0)}%</small></div>`;
+}
+function panelTruck(tr) {
+  const c = CARR[tr.c], [st, cls] = ST[tr.state], e = eta(tr), p = truckProg(tr);
+  const sub = tr.state === 'enroute' ? `前往 ${tr.S.code} · 預計 ${e.min} 分鐘` : tr.state === 'gate' ? `${tr.S.code} 閘門報到` : tr.state === 'docking' ? `倒車進 ${tr.dk.label} · ${tr.S.code}` : `${tr.dk.label} · 已靠站`;
+  const plabel = e ? `剩 ${e.m} m` : `${tr.pal[0]}/${tr.pal[1]} 棧板`;
+  return `<div class="dh"><span class="ico">${truckIco(c.color)}</span><div><div class="eyebrow" style="color:${c.color}">${c.zh}</div><h2 class="id">${tr.id}</h2><p>${tr.driver} · ${tr.plate}</p></div><div class="acts">${trackBtn()}${xBtn}</div></div>
+    <div class="dstate"><span class="pill ${cls}">${st}</span><span>${sub}</span></div>
+    <div class="prog"><span class="bar ${p.cls}"><i style="width:${p.pct.toFixed(1)}%"></i></span><small class="mono">${plabel}</small></div>
+    <dl class="kv">
+      <dt>出貨單</dt><dd class="link">${tr.shipment}</dd>
+      <dt>客戶</dt><dd>${tr.customer}</dd>
+      <dt>${tr.dir === 'out' ? '送達地' : '目的地'}</dt><dd>${tr.dir === 'out' ? tr.to : `${tr.S.code} ${tr.S.name}`}</dd>
+      <dt>${e ? '預計抵達' : '靠站時間'}</dt><dd class="mono">${e ? `${fmt(e.at)}（${e.min} 分）` : (tr.times[3] || tr.times[2])}</dd>
+      <dt>車速</dt><dd class="mono">${Math.round(tr.v * 5.5)} km/h</dd>
+      <dt>碼頭</dt><dd>${tr.dk.label} · ${tr.S.code}</dd>
+      <dt>${tr.dir === 'in' ? '卸貨' : '裝貨'}</dt><dd class="mono">${tr.pal[0]}/${tr.pal[1]} 棧板 · ${fmtN(tr.pal[0] * 412)} kg</dd>
+    </dl>`;
+}
+function panelForklift(f) {
+  const [st, cls] = flState(f);
+  return `<div class="dh"><span class="ico">${flIco}</span><div><div class="eyebrow">堆高機 · ${f.S.code}</div><h2 class="id">${f.id}</h2><p>${f.driver} · ${f.model}</p></div><div class="acts">${trackBtn()}${xBtn}</div></div>
+    <div class="dstate"><span class="pill ${cls}">${st}</span><span>${f.task}</span></div>
+    <div class="prog"><span class="bar ${f.battery < 30 ? 'warn' : 'good'}"><i style="width:${f.battery.toFixed(0)}%"></i></span><small class="mono">電量 ${f.battery.toFixed(0)}%</small></div>
+    <dl class="kv">
+      <dt>載貨</dt><dd>${f.carrying ? '1 棧板 · 紙箱（中）' : '空車'}</dd>
+      <dt>今日搬運</dt><dd class="mono">${f.moves} 趟</dd>
+      <dt>車速</dt><dd class="mono">${f.speed ? f.speed.toFixed(1) : '0.0'} km/h</dd>
+      <dt>充電座</dt><dd>${f.charger ? f.charger.id : '—'}</dd>
+      <dt>據點</dt><dd>${f.S.name}</dd>
+    </dl>`;
+}
+function panelItem(it) {
+  return `<div class="dh"><span class="ico">${palIco}</span><div><div class="eyebrow">棧板 · ${it.S.code}</div><h2>${it.name}</h2><p class="mono">${it.sku}</p></div><div class="acts">${xBtn}</div></div>
+    <div class="dstate"><span class="pill ${it.sc}">${it.status}</span><span>${it.loc}</span></div>
+    <dl class="kv"><dt>數量</dt><dd class="mono">${it.qty}</dd><dt>毛重</dt><dd class="mono">${it.weight}</dd><dt>儲位</dt><dd>${it.loc}</dd><dt>批號</dt><dd class="mono">${it.lot}</dd><dt>入庫時間</dt><dd class="mono">${it.recv}</dd><dt>據點</dt><dd>${it.S.name}</dd></dl>`;
+}
+function panelCharger(c) {
+  const f = c.fl;
+  return `<div class="dh"><span class="ico">${chIco}</span><div><div class="eyebrow">充電座 · ${c.S.code}</div><h2 class="id">${c.id}</h2><p>48V 鋰電池快充座</p></div><div class="acts">${xBtn}</div></div>
+    <div class="dstate"><span class="pill ${f ? 'warn' : 'mute'}">${f ? '充電中' : '空閒'}</span><span>${f ? `${f.id} 電量 ${f.battery.toFixed(0)}%` : '目前無車輛'}</span></div>
+    ${f ? `<div class="prog"><span class="bar good"><i style="width:${f.battery.toFixed(0)}%"></i></span><small class="mono">${f.battery.toFixed(0)}%</small></div>` : ''}
+    <dl class="kv"><dt>堆高機</dt><dd class="link">${f ? f.id : '—'}</dd><dt>輸出功率</dt><dd class="mono">${f ? '6.6' : '0.0'} kW</dd><dt>今日供電</dt><dd class="mono">${c.kwh} kWh</dd><dt>充電速率</dt><dd class="mono">${f ? '8%' : '0%'}／分</dd><dt>據點</dt><dd>${c.S.name}</dd></dl>`;
+}
+function renderDetail() {
+  const d = $('detail');
+  d.classList.toggle('site', !sel);
+  d.innerHTML = !sel ? panelSite(cur) : sel.kind === 'truck' ? panelTruck(sel) : sel.kind === 'forklift' ? panelForklift(sel) : sel.kind === 'item' ? panelItem(sel) : panelCharger(sel);
+}
+
+const ICONS = {
+  order: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M9 9h6M9 13h6"/></svg>',
+  pick: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 20 7.5v9L12 21l-8-4.5v-9Z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg>',
+  load: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="16" height="13" rx="2"/><path d="M9 6V4h6v2M4 11h16"/></svg>',
+  move: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 7h12v9H2zM14 10h4l3 3v3h-7"/><circle cx="6" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/></svg>',
+  done: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>',
+};
+function featured() { return sel && sel.kind === 'truck' ? sel : (cur.trucks.find(t => t.state === 'loading') || cur.trucks[0]); }
+function renderTrack() {
+  const tr = featured(), e = eta(tr), [st, cls] = ST[tr.state];
+  let names, cur_, times;
+  if (tr.dir === 'out') {
+    names = ['訂單確認', '揀貨', `裝貨 ${tr.pal[0]}/${tr.pal[1]}`, '運送中', '已送達'];
+    cur_ = tr.pal[0] >= tr.pal[1] ? 3 : 2;
+    const etaLoad = new Date(Date.now() + (tr.pal[1] - tr.pal[0]) * 3.4 * TIME_SCALE * 1000);
+    times = [tr.times[0], tr.times[1], `預計 ${fmt(etaLoad)}`, '—', '—'];
+  } else {
+    const unl = tr.state === 'unloading';
+    names = ['訂單確認', '揀貨', '已裝車', '運送中', unl ? `卸貨 ${tr.pal[0]}/${tr.pal[1]}` : '已送達'];
+    cur_ = moving(tr) ? 3 : (tr.pal[0] >= tr.pal[1] ? 5 : 4);
+    times = [tr.times[0], tr.times[1], tr.times[2], tr.times[3], e ? `預計 ${fmt(e.at)}` : tr.times[3]];
+  }
+  const shipLine = e ? `${fmt(e.at)} 抵達 · 剩 ${e.min} 分` : `${tr.S.code} · ${tr.dk.label} · ${tr.pal[0]}/${tr.pal[1]} 棧板`;
+  $('track').innerHTML = `<div class="steps"><div class="th"><h3>${ICONS.move}出貨追蹤</h3><small class="mono">${tr.id} · ${CARR[tr.c].name}</small></div>
+    <ol class="stp">${names.map((n, i) => `<li class="${i < cur_ ? 'done' : i === cur_ ? 'cur' : ''}"><span class="dotc">${ICONS[['order', 'pick', 'load', 'move', 'done'][i]]}</span><b>${n}</b><time>${times[i] || '—'}</time></li>`).join('')}</ol></div>
+    <button class="ship" data-id="${tr.id}"><b>${tr.shipment}</b><small>${tr.dir === 'out' ? '至 ' + tr.to : '至 ' + tr.S.code + ' ' + tr.S.name}</small><span class="pill ${cls}">${st}</span><small>${shipLine}</small></button>`;
+}
+function renderRows() {
+  const S = cur; let html = '';
+  if (tab === 'trucks') html = S.trucks.map(t => { const [st, cls] = ST[t.state], p = truckProg(t), c = CARR[t.c];
+    return `<button class="row ${t === sel ? 'sel' : ''}" data-id="${t.id}"><div><b>${t.id}</b><small>${c.name}</small></div><div class="rloc"><i class="dot" style="--c:${c.color}"></i>${truckWhere(t)}</div><span class="pill ${cls}">${st}</span><div class="rprog"><span class="bar ${p.cls}"><i style="width:${p.pct.toFixed(0)}%"></i></span><small>${p.label}</small></div></button>`; }).join('');
+  else if (tab === 'docks') { const L = { busy: ['作業中', 'good'], arriving: ['靠站中', 'acc'], reserved: ['已預約', 'warn'], free: ['空閒', 'mute'] };
+    html = dockStates(S).map(({ d, s, tr }) => `<button class="row ${tr && tr === sel ? 'sel' : ''}" ${tr ? `data-id="${tr.id}"` : ''}><div><b>${d.label}</b><small>${S.code}</small></div><div class="rloc">${tr ? `<i class="dot" style="--c:${CARR[tr.c].color}"></i>${tr.id} · ${CARR[tr.c].name}` : '尚未指派車輛'}</div><span class="pill ${L[s][1]}">${L[s][0]}</span><div class="rprog">${tr && s === 'busy' ? `<span class="bar good"><i style="width:${(100 * tr.pal[0] / tr.pal[1]).toFixed(0)}%"></i></span><small>${tr.pal[0]}/${tr.pal[1]}</small>` : ''}</div></button>`).join(''); }
+  else html = S.forklifts.map(f => { const [st, cls] = flState(f);
+    return `<button class="row ${f === sel ? 'sel' : ''}" data-id="${f.id}"><div><b>${f.id}</b><small>${S.code}</small></div><div class="rloc">${f.task}</div><span class="pill ${cls}">${st}</span><div class="rprog"><span class="bar ${f.battery < 30 ? 'warn' : 'good'}"><i style="width:${f.battery.toFixed(0)}%"></i></span><small>${f.battery.toFixed(0)}%</small></div></button>`; }).join('');
+  $('rows').innerHTML = html;
+}
+function renderTop() {
+  const S = cur, busy = busyDocks(S);
+  $('siteCode').textContent = S.code; $('siteName').textContent = S.name;
+  $('siteSub').textContent = `${Math.round(100 * S.stock / S.cap)}% 滿載 · ${busy}/${S.docks.length} 碼頭作業中`;
+  $('kStock').textContent = fmtN(S.stock); $('kStockD').textContent = `▲ ${S.dStock}`; $('kStockS').textContent = `棧板 · ${S.code}`;
+  const n = onSite(S), inb = S.trucks.filter(t => t.dir === 'in' && moving(t)).length;
+  $('kTrucks').textContent = n; $('kTrucksD').textContent = `▲ ${inb}`; $('kTrucksS').textContent = `${inb} 輛進場中 · ${S.code}`;
+  $('kOn').textContent = S.on.toFixed(1) + '%'; $('kOnD').textContent = `▲ ${S.dOn}%`; $('kOnS').textContent = `近 30 天 · ${S.code}`;
+  $('tDocks').textContent = `${busy}/${S.docks.length}`; $('tFl').textContent = `${S.forklifts.filter(f => f.mode === 'shuttle').length}/${S.forklifts.length}`; $('tTr').textContent = S.trucks.length; $('tWhere').textContent = S.name;
+  SITES.forEach(X => dockStates(X).forEach(({ d, s }) => {
+    const c = s === 'busy' ? '#22c07f' : s === 'arriving' ? '#f2a33a' : '#9aa3b6';
+    d.light.material.color.set(c); d.light.material.emissive.set(s === 'free' || s === 'reserved' ? '#000000' : c); d.light.material.emissiveIntensity = .7;
+  }));
+}
+function renderUI() { renderTop(); renderDetail(); renderTrack(); renderRows(); }
+
+/* panels events */
+const press = (el, fn) => { el.addEventListener('pointerdown', e => { if (e.button === 0) fn(e); }); el.addEventListener('click', e => { if (e.detail === 0) fn(e); }); };
+press($('detail'), e => {
+  if (e.target.closest('#close')) select(null);
+  if (e.target.closest('#follow') && sel) { tracking = !tracking; if (tracking) { if (sel.kind === 'truck' || sel.kind === 'forklift') view.follow = sel; else view.goal = wpos(sel); } else view.follow = null; renderDetail(); }
+});
+const byId = id => ALL.find(e => e.id === id);
+press($('rows'), e => { const r = e.target.closest('[data-id]'); if (r) select(byId(r.dataset.id)); });
+press($('track'), e => { const r = e.target.closest('[data-id]'); if (r) select(byId(r.dataset.id)); });
+document.querySelector('.tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; tab = b.dataset.tab; document.querySelectorAll('[data-tab]').forEach(x => x.setAttribute('aria-selected', x === b)); renderRows(); });
+
+/* site menu */
+function closePops() { ['siteMenu', 'notes', 'res'].forEach(id => $(id).hidden = true); }
+$('siteBtn').onclick = e => {
+  e.stopPropagation(); const m = $('siteMenu'), open = m.hidden; closePops();
+  if (!open) return;
+  m.innerHTML = SITES.map(S => `<button data-site="${S.code}" class="${S === cur ? 'on' : ''}"><span class="site-code">${S.code}</span><div><b>${S.name}</b><small>${S.type} · ${Math.round(100 * S.stock / S.cap)}% 滿載 · ${busyDocks(S)}/${S.docks.length} 碼頭作業中</small></div></button>`).join('');
+  m.hidden = false;
+};
+$('siteMenu').onclick = e => { const b = e.target.closest('[data-site]'); if (!b) return; sel = null; setSite(SITES.find(S => S.code === b.dataset.site)); closePops(); };
+$('siteNext').onclick = () => { sel = null; setSite(SITES[(SITES.indexOf(cur) + 1) % SITES.length]); };
+$('bell').onclick = e => {
+  e.stopPropagation(); const n = $('notes'), open = n.hidden; closePops(); if (!open) return;
+  const ar = SITES.flatMap(S => S.trucks).find(t => t.state === 'enroute'), lo = SITES.flatMap(S => S.forklifts).sort((a, b) => a.battery - b.battery)[0];
+  n.innerHTML = `<h4>通知</h4>
+    <div style="--c:var(--warn)"><span></span><p style="margin:0">台中港配送中心「紙箱（大）」低於安全庫存<small>09:12</small></p></div>
+    <div style="--c:var(--accent)"><span></span><p style="margin:0">${ar ? `${ar.id} 預計 ${eta(ar).min} 分後抵達${ar.S.name} ${ar.dk.label}` : '目前無車輛進場'}<small>${fmt(new Date())}</small></p></div>
+    <div style="--c:var(--good)"><span></span><p style="margin:0">${lo.id} 電量 ${lo.battery.toFixed(0)}%，${lo.mode === 'charge' ? '充電中' : '建議排程充電'}<small>${fmt(new Date())}</small></p></div>`;
+  n.hidden = false;
+};
+document.addEventListener('click', e => { if (!e.target.closest('.pop,#siteBtn,#bell,.search')) closePops(); });
+
+/* search */
+const KIND = { truck: '車輛', forklift: '堆高機', item: '貨品', charger: '充電座', site: '據點' };
+function searchIdx(q) {
+  q = q.trim().toLowerCase(); if (!q) return [];
+  return ALL.filter(e => [e.id, e.code, e.name, e.driver, e.shipment, e.customer, e.sku, e.c && CARR[e.c].name].filter(Boolean).join(' ').toLowerCase().includes(q)).slice(0, 7);
+}
+$('q').addEventListener('input', () => {
+  const r = searchIdx($('q').value), box_ = $('res');
+  if (!r.length) { box_.hidden = !$('q').value.trim(); box_.innerHTML = '<div style="padding:10px;color:var(--ink-3)">找不到符合的項目</div>'; return; }
+  box_.innerHTML = r.map((e, i) => `<button data-i="${i}" class="${i ? '' : 'on'}"><span class="k">${KIND[e.kind]}</span><span><b class="mono">${e.kind === 'site' ? e.code : e.kind === 'item' ? e.name : e.id}</b> <small>${e.kind === 'site' ? e.name : e.kind === 'truck' ? e.shipment + ' · ' + e.customer : e.kind === 'item' ? e.sku : e.driver || ''}</small></span><small>${e.kind === 'site' ? '' : e.S.code}</small></button>`).join('');
+  box_.hidden = false; box_._r = r;
+});
+$('res').onclick = e => { const b = e.target.closest('[data-i]'); if (!b) return; select($('res')._r[+b.dataset.i]); closePops(); $('q').blur(); };
+$('q').addEventListener('keydown', e => { if (e.key === 'Enter') { const r = searchIdx($('q').value); if (r[0]) { select(r[0]); closePops(); $('q').blur(); } } if (e.key === 'Escape') { closePops(); $('q').blur(); } });
+addEventListener('keydown', e => { if (e.key === '/' && document.activeElement !== $('q')) { e.preventDefault(); $('q').focus(); } });
+
+const tick = () => { $('clock').textContent = fmt(new Date()); }; tick(); setInterval(tick, 1000);
+
+/* ================= simulation ================= */
+let clock = 0;
+function stepTruck(tr, dt) {
+  if (moving(tr)) {
+    const s = tr.pos, gateZone = !s.rev && s.z < 12.6 && s.z > 9.6 && s.x > 18;
+    const want = s.rev ? 1.7 : (s.z > 12.4 ? 8.5 : 3.2);
+    tr.v += (want - tr.v) * Math.min(1, dt * 1.6);
+    tr.t += tr.v * dt;
+    if (tr.t >= tr.path.len) { tr.t = tr.path.len; tr.state = tr.dir === 'in' ? 'unloading' : 'loading'; tr.v = 0; tr.timer = 0; tr.pal[0] = 0; }
+    else tr.state = s.rev ? 'docking' : gateZone ? 'gate' : 'enroute';
+    placeTruck(tr);
+  } else {
+    tr.v = 0; tr.timer += dt;
+    if (tr.pal[0] < tr.pal[1]) { if (tr.timer > 3.6) { tr.pal[0]++; tr.timer = 0; } }
+    else if (tr.timer > 7) {
+      if (tr.mover) { tr.t = 0; tr.si = 0; tr.state = 'enroute'; tr.pal[0] = 0; tr.times[3] = fmt(new Date()); }
+      else tr.pal[0] = 0;
+      tr.timer = 0; placeTruck(tr);
+    }
+  }
+}
+function stepForklift(f, dt) {
+  f.speed = 0;
+  if (f.mode === 'charge') { f.battery = Math.min(100, f.battery + dt * .25); return; }
+  if (f.mode !== 'shuttle') return;
+  if (f.pause > 0) { f.pause -= dt; return; }
+  const p = f.obj.position, dx = f.to.x - p.x, dz = f.to.z - p.z, L = Math.hypot(dx, dz);
+  if (L < .15) {
+    f.carrying = f.to === f.A; f.obj.userData.load.visible = f.carrying;
+    if (f.to === f.B) f.moves++;
+    f.to = f.to === f.A ? f.B : f.A; f.pause = 1.3; return;
+  }
+  const want = Math.atan2(-dz, dx); f.h = lerpAng(f.h, want, Math.min(1, dt * 4)); f.obj.rotation.y = f.h;
+  const aligned = Math.abs(lerpAng(0, want - f.h, 1)) < .3, sp = (aligned ? 2.4 : .5) * dt;
+  p.x += Math.cos(f.h) * Math.min(sp, L); p.z -= Math.sin(f.h) * Math.min(sp, L);
+  f.speed = aligned ? 8.2 : 2; f.battery = Math.max(18, f.battery - dt * .03);
+}
+function stepAmr(a, dt) {
+  const P = a.pts, A = P[a.seg], B = P[(a.seg + 1) % 4], L = A.distanceTo(B);
+  a.u += dt * 2.2 / L; if (a.u >= 1) { a.u -= 1; a.seg = (a.seg + 1) % 4; }
+  const A2 = P[a.seg], B2 = P[(a.seg + 1) % 4];
+  a.g.position.set(A2.x + (B2.x - A2.x) * a.u, 0, A2.z + (B2.z - A2.z) * a.u);
+  a.h = lerpAng(a.h, Math.atan2(-(B2.z - A2.z), B2.x - A2.x), Math.min(1, dt * 6)); a.g.rotation.y = a.h;
+}
+function buildRibbon(S, tr) {
+  const pos = [], P = tr.path.S, w = .55, y = .05;
+  for (let i = 0; i < P.length - 1; i++) {
+    const a = P[i].p, b = P[i + 1].p, dx = b.x - a.x, dz = b.z - a.z, L = Math.hypot(dx, dz) || 1, nx = -dz / L * w, nz = dx / L * w;
+    pos.push(a.x + nx, y, a.z + nz, a.x - nx, y, a.z - nz, b.x + nx, y, b.z + nz, a.x - nx, y, a.z - nz, b.x - nx, y, b.z - nz, b.x + nx, y, b.z + nz);
+  }
+  S.ribbon.geometry.dispose(); S.ribbon.geometry = new THREE.BufferGeometry();
+  S.ribbon.geometry.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); S.ribbon.userData.tr = tr;
+}
+
+const tag = $('tag');
+let last = performance.now(), uiAcc = 0;
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now; clock += dt;
+  SITES.forEach(S => { S.trucks.forEach(t => stepTruck(t, dt)); S.forklifts.forEach(f => stepForklift(f, dt)); S.amrs.forEach(a => stepAmr(a, dt)); });
+  if (!reduceMotion) pins.forEach((p, i) => { p.g.position.y = p.y + Math.sin(clock * 2.2 + i) * .28; p.g.rotation.y += dt; });
+
+  const k = reduceMotion ? 1 : Math.min(1, dt * 5);
+  view.az += (view.azTo - view.az) * k; view.zoom += (view.zoomTo - view.zoom) * k;
+  if (view.follow) view.target.lerp(view.follow.obj.getWorldPosition(new THREE.Vector3()).setY(0), reduceMotion ? 1 : Math.min(1, dt * 2.5));
+  else if (view.goal) { view.target.lerp(view.goal, reduceMotion ? 1 : Math.min(1, dt * 3)); if (view.target.distanceTo(view.goal) < .05) view.goal = null; }
+  updateCamera();
+  SITES.forEach(S => S.g.visible = Math.abs(S.g.position.x - view.target.x) < 125);
+
+  SITES.forEach(S => S.ribbon.visible = false);
+  if (sel && sel.kind === 'truck' && moving(sel)) {
+    const S = sel.S; if (S.ribbon.userData.tr !== sel) buildRibbon(S, sel);
+    S.ribbon.visible = true; S.ribbon.geometry.setDrawRange(sel.si * 6, Infinity);
+  }
+  if (sel) {
+    const p = sel.obj.getWorldPosition(new THREE.Vector3());
+    bracket.visible = true; bracket.position.set(p.x, .07, p.z); bracket.rotation.y = sel.obj.rotation.y;
+    const pulse = 1 + (reduceMotion ? 0 : Math.sin(clock * 4) * .025);
+    bracket.scale.set(sel.fp[0] * pulse, 1, sel.fp[1] * pulse);
+    const tp = p.clone(); tp.y = sel.tagY; tp.project(camera);
+    tag.hidden = false; tag.style.transform = `translate(${(tp.x + 1) / 2 * app.clientWidth}px,${(1 - tp.y) / 2 * app.clientHeight}px) translate(-50%,calc(-100% - 6px))`;
+    const st = sel.kind === 'truck' ? ST[sel.state][0] : sel.kind === 'forklift' ? flState(sel)[0] : sel.kind === 'item' ? sel.status : (sel.fl ? '充電中' : '空閒');
+    tag.innerHTML = `${sel.kind === 'item' ? sel.name : sel.id}<span>${st}</span>`;
+  } else { bracket.visible = false; tag.hidden = true; }
+
+  uiAcc += dt; if (uiAcc > .3) { uiAcc = 0; renderUI(); }
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+resize();
+renderUI();
+requestAnimationFrame(frame);
+})();
+</script>
+
+</body>
+</html>
